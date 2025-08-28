@@ -4,67 +4,574 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laporan - Nutri AI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 1rem;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1rem;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, #fff, #f0f8ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .reports-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 2rem;
+        }
+
+        .reports-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .reports-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .export-btn {
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(67, 233, 123, 0.3);
+        }
+
+        .laporan-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid #4facfe;
+            transition: all 0.3s ease;
+        }
+
+        .laporan-card:hover {
+            transform: translateX(4px);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .laporan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .laporan-date {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #4facfe;
+        }
+
+        .laporan-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 12px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-item .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-item .label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .protein-value {
+            color: #43e97b;
+        }
+
+        .calories-value {
+            color: #f5576c;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            opacity: 0.3;
+        }
+
+        .empty-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .empty-desc {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .cta-btn {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(79, 172, 254, 0.3);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .laporan-stats {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .reports-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
 </head>
 <body>
+    <a href="/dashboard/{{ user.username }}" class="back-btn">
+        <i class="fas fa-arrow-left"></i>
+    </a>
+
     <div class="container">
-        <div class="sidebar">
-            <div class="profile">
-                <img src="{{ url_for('uploaded_file', filename=user.profile_picture) }}" alt="Profile Picture" class="profile-pic">
-                <p class="username">{{ user.username }}</p>
-            </div>
-            <nav class="menu">
-                <a href="/dashboard/{{ user.username }}" class="menu-item">Dashboard</a>
-                <a href="/input_makanan/{{ user.username }}" class="menu-item">Input Makanan</a>
-                <a href="/laporan/{{ user.username }}" class="menu-item active">Laporan</a>
-                <a href="/tambah_data/{{ user.username }}" class="menu-item">Tambah Data Makanan</a>
-                <a href="/logout" class="menu-item logout">Logout</a>
-            </nav>
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> Laporan Nutrisi</h1>
+            <p>Pantau progress dan riwayat asupan nutrisi Anda</p>
         </div>
 
-        <div class="main-content">
-            <header class="header">
-                <h1>Laporan Makanan</h1>
-                <p>Berikut adalah laporan makanan yang telah dikonsumsi berdasarkan waktu makan</p>
-            </header>
+        <!-- Statistics Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <div class="stat-value">{{ laporan_data|length }}</div>
+                <div class="stat-label">Total Hari Tercatat</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">
+                    <i class="fas fa-dumbbell"></i>
+                </div>
+                <div class="stat-value">
+                    {% if laporan_data %}
+                        {{ "%.0f"|format(laporan_data|sum(attribute='total_protein') / laporan_data|length) }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </div>
+                <div class="stat-label">Rata-rata Protein/Hari (g)</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                    <i class="fas fa-fire"></i>
+                </div>
+                <div class="stat-value">
+                    {% if laporan_data %}
+                        {{ "%.0f"|format(laporan_data|sum(attribute='total_kalori') / laporan_data|length) }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </div>
+                <div class="stat-label">Rata-rata Kalori/Hari (kcal)</div>
+            </div>
+        </div>
 
-            <!-- Tampilkan laporan per hari -->
-            <section class="report-table-container">
-                <h2>Laporan Asupan Makanan</h2>
-                {% for laporan in laporan_data %}
-                    <div class="laporan-section">
-                        <h3>Laporan Tanggal: {{ laporan.tanggal.strftime('%d-%m-%Y') }}</h3>
-                        <table class="report-table">
-                            <thead>
-                                <tr>
-                                    <th>Waktu Makan</th>
-                                    <th>Nama Makanan</th>
-                                    <th>Porsi</th>
-                                    <th>Protein (g)</th>
-                                    <th>Kalori (kcal)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in laporan.items %}
-                                    <tr>
-                                        <td>{{ item.waktu_makan }}</td>
-                                        <td>{{ item.food.nama_makanan }}</td>
-                                        <td>{{ item.food.porsi }}</td>
-                                        <td>{{ item.food.protein }}</td>
-                                        <td>{{ item.food.kalori }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+        <!-- Chart Container -->
+        {% if laporan_data|length > 1 %}
+        <div class="chart-container">
+            <h3 class="chart-title">Grafik Progress Nutrisi</h3>
+            <canvas id="nutritionChart" width="400" height="150"></canvas>
+        </div>
+        {% endif %}
 
-                        <div class="total-stats">
-                            <p><strong>Total Protein: </strong>{{ laporan.total_protein }} g</p>
-                            <p><strong>Total Kalori: </strong>{{ laporan.total_kalori }} kcal</p>
+        <!-- Reports List -->
+        <div class="reports-container">
+            <div class="reports-header">
+                <h3 class="reports-title">
+                    <i class="fas fa-history"></i>
+                    Riwayat Laporan
+                </h3>
+                {% if laporan_data %}
+                <button class="export-btn" onclick="exportData()">
+                    <i class="fas fa-download"></i>
+                    Export Data
+                </button>
+                {% endif %}
+            </div>
+
+            {% if laporan_data %}
+                {% for laporan in laporan_data[:10] %}
+                <div class="laporan-card">
+                    <div class="laporan-header">
+                        <div class="laporan-date">
+                            <i class="fas fa-calendar-alt"></i>
+                            {{ laporan.tanggal.strftime('%d %B %Y - %H:%M') }}
                         </div>
                     </div>
+                    
+                    <div class="laporan-stats">
+                        <div class="stat-item">
+                            <div class="value protein-value">{{ laporan.total_protein }}g</div>
+                            <div class="label">Total Protein</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="value calories-value">{{ laporan.total_kalori }} kcal</div>
+                            <div class="label">Total Kalori</div>
+                        </div>
+                    </div>
+                </div>
                 {% endfor %}
-            </section>
+                
+                {% if laporan_data|length > 10 %}
+                <div style="text-align: center; margin-top: 2rem;">
+                    <p style="color: rgba(255,255,255,0.7);">
+                        Menampilkan 10 laporan terbaru dari {{ laporan_data|length }} total laporan
+                    </p>
+                </div>
+                {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3 class="empty-title">Belum Ada Laporan</h3>
+                <p class="empty-desc">
+                    Anda belum memiliki laporan nutrisi. Mulai input makanan dan buat laporan pertama Anda untuk melihat progress nutrisi Anda.
+                </p>
+                <a href="/input_makanan/{{ user.username }}" class="cta-btn">
+                    <i class="fas fa-plus"></i>
+                    Mulai Input Makanan
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="/input_makanan/{{ user.username }}" class="cta-btn">
+                <i class="fas fa-utensils"></i>
+                Input Makanan Baru
+            </a>
+            
+            {% if laporan_data %}
+            <form method="POST" action="/reset_and_report" style="display: inline;">
+                <button type="submit" class="cta-btn" style="background: linear-gradient(135deg, #f093fb, #f5576c);" 
+                        onclick="return confirm('Yakin ingin reset data hari ini dan buat laporan?')">
+                    <i class="fas fa-refresh"></i>
+                    Reset & Buat Laporan
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
+
+    <script>
+        // Chart.js Configuration
+        {% if laporan_data|length > 1 %}
+        const ctx = document.getElementById('nutritionChart').getContext('2d');
+        
+        // Prepare data
+        const reportData = {{ laporan_data|tojson }};
+        const labels = reportData.slice(-7).map(item => {
+            const date = new Date(item.tanggal);
+            return date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+        });
+        
+        const proteinData = reportData.slice(-7).map(item => item.total_protein);
+        const caloriesData = reportData.slice(-7).map(item => item.total_kalori);
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Protein (g)',
+                    data: proteinData,
+                    borderColor: '#43e97b',
+                    backgroundColor: 'rgba(67, 233, 123, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }, {
+                    label: 'Kalori (kcal)',
+                    data: caloriesData,
+                    borderColor: '#f5576c',
+                    backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'white'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.8)'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.8)'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        },
+                    }
+                }
+            }
+        });
+        {% endif %}
+
+        // Export functionality
+        function exportData() {
+            const data = {{ laporan_data|tojson }};
+            
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Tanggal,Waktu Makan,Total Protein (g),Total Kalori (kcal)\n";
+            
+            data.forEach(item => {
+                const date = new Date(item.tanggal).toLocaleDateString('id-ID');
+                const time = new Date(item.tanggal).toLocaleTimeString('id-ID', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                csvContent += `${date},${item.waktu_makan},${item.total_protein},${item.total_kalori}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "laporan_nutrisi.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Animation on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe all cards
+        document.querySelectorAll('.laporan-card, .stat-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.6s ease';
+            observer.observe(card);
+        });
+
+        // Auto refresh every 5 minutes
+        setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                location.reload();
+            }
+        }, 300000);
+    </script>
 </body>
 </html>

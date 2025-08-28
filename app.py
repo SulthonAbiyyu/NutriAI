@@ -10,7 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///nutri_ai.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'your_secret_key_here'  # Ganti dengan secret key yang lebih kuat
+app.secret_key = 'nutri_ai_secret_key_2024'  # Ganti dengan secret key yang lebih kuat
 db = SQLAlchemy(app)
 
 # Initialize Flask-Migrate
@@ -18,8 +18,11 @@ migrate = Migrate(app, db)
 
 # Tentukan folder untuk menyimpan gambar
 UPLOAD_FOLDER = os.path.join('static', 'images')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Pastikan folder upload ada
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Memeriksa ekstensi file yang diizinkan
 def allowed_file(filename):
@@ -48,7 +51,6 @@ class User(db.Model):
     tdee = db.Column(db.Float, nullable=True)
     foods = db.relationship('Food', backref='user', lazy=True)
 
-
 class Food(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nama_makanan = db.Column(db.String(120), nullable=False)
@@ -73,10 +75,12 @@ class Food(db.Model):
 class WaktuMakan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     waktu_makan = db.Column(db.String(50), nullable=False)
-    food_id = db.Column(db.Integer, db.ForeignKey('food.id', name='fk_food_id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id', name='fk_user_id'), nullable=False)
-    food = db.relationship('Food', backref='waktu_makan', lazy=True)
-    user = db.relationship('User', backref='waktu_makan', lazy=True)
+    food_id = db.Column(db.Integer, db.ForeignKey('food.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    tanggal = db.Column(db.Date, default=datetime.utcnow().date)
+
+    food = db.relationship('Food', backref='waktu_makan_entries', lazy=True)
+    user = db.relationship('User', backref='waktu_makan_entries', lazy=True)
 
     def __repr__(self):
         return f'<WaktuMakan {self.waktu_makan}>'
@@ -85,7 +89,7 @@ class WaktuMakan(db.Model):
 class Laporan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    food_id = db.Column(db.Integer, db.ForeignKey('food.id', name='fk_food_id'), nullable=True)
+    food_id = db.Column(db.Integer, db.ForeignKey('food.id', name='fk_laporan_food_id'), nullable=True)
     waktu_makan = db.Column(db.String(50), nullable=False)
     tanggal = db.Column(db.DateTime, default=datetime.utcnow)
     total_protein = db.Column(db.Integer, nullable=False)
@@ -106,32 +110,51 @@ def home():
 
 @app.route('/profile/<username>')
 def profile(username):
+    if 'username' not in session:
+        return redirect(url_for('login'))
     user = User.query.filter_by(username=username).first_or_404()
     return render_template('profile.html', user=user)
 
 @app.route('/update_profile_picture', methods=['POST'])
 def update_profile_picture():
+    if 'username' not in session:
+        return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+    
     if 'profile_picture' not in request.files:
         return jsonify({'status': 'error', 'message': 'No file part'}), 400
+        
     file = request.files['profile_picture']
     if file.filename == '':
         return jsonify({'status': 'error', 'message': 'No selected file'}), 400
+        
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
+        # Tambahkan timestamp untuk mencegah conflict nama file
+        timestamp = str(int(datetime.now().timestamp()))
+        name, ext = os.path.splitext(filename)
+        filename = f"{name}_{timestamp}{ext}"
+        
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
         try:
-            # Menyimpan file
             file.save(file_path)
-            print(f"File saved to: {file_path}")  # Debug: Tampilkan path penyimpanan file
+            print(f"File saved to: {file_path}")
 
-            # Update foto profil di database
             user = User.query.filter_by(username=session.get('username')).first_or_404()
+            
+            # Hapus file lama jika ada
+            if user.profile_picture:
+                old_file_path = os.path.join(app.config['UPLOAD_FOLDER'], user.profile_picture)
+                if os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+            
             user.profile_picture = filename
             db.session.commit()
 
-            # Kembalikan URL gambar yang baru
-            return jsonify({'status': 'success', 'profile_picture_url': url_for('uploaded_file', filename=filename)})
+            return jsonify({
+                'status': 'success', 
+                'profile_picture_url': url_for('uploaded_file', filename=filename)
+            })
 
         except Exception as e:
             db.session.rollback()
@@ -141,80 +164,111 @@ def update_profile_picture():
 
 @app.route('/register', methods=['POST'])
 def register():
-    # Ambil data dari form
-    umur = int(request.form['umur'])
-    tb = int(request.form['tb'])
-    bb = int(request.form['bb'])
-    gender = request.form['gender']
-    aktivitas = request.form['aktivitas']
-    tujuan = request.form['tujuan']
-    tipe_tubuh = request.form.get('body_type')
+    try:
+        # Validasi input
+        required_fields = ['username', 'password', 'umur', 'tb', 'bb', 'gender', 'aktivitas', 'tujuan']
+        for field in required_fields:
+            if field not in request.form or not request.form[field]:
+                return jsonify({'error': f'Field {field} is required'}), 400
 
-    # Hitung BMR menggunakan rumus Mifflin-St Jeor
-    if gender == 'laki_laki':
-        bmr = 10 * bb + 6.25 * tb - 5 * umur + 5
-    else:
-        bmr = 10 * bb + 6.25 * tb - 5 * umur - 161
+        # Cek apakah username sudah ada
+        existing_user = User.query.filter_by(username=request.form['username']).first()
+        if existing_user:
+            return jsonify({'error': 'Username already exists'}), 400
 
-    # Menentukan faktor aktivitas berdasarkan pilihan pengguna
-    if aktivitas == 'sangat_tidak_aktif':
-        tdee = bmr * 1.2  # Sedentary
-    elif aktivitas == 'aktivitas_ringan':
-        tdee = bmr * 1.375  # Lightly active
-    elif aktivitas == 'aktivitas_sedang':
-        tdee = bmr * 1.55  # Moderately active
-    elif aktivitas == 'aktivitas_berat':
-        tdee = bmr * 1.725  # Very active
+        # Ambil data dari form
+        umur = int(request.form['umur'])
+        tb = int(request.form['tb'])
+        bb = int(request.form['bb'])
+        gender = request.form['gender']
+        aktivitas = request.form['aktivitas']
+        tujuan = request.form['tujuan']
+        tipe_tubuh = request.form.get('body_type', 'mesomorph')
 
-    # Penyesuaian berdasarkan tipe tubuh
-    if tipe_tubuh == 'ectomorph':
-        tdee *= 1.2  # Ectomorph membutuhkan lebih banyak kalori
-    elif tipe_tubuh == 'mesomorph':
-        tdee *= 1.55  # Mesomorph tetap dengan faktor standar
-    elif tipe_tubuh == 'endomorph':
-        tdee *= 1.8  # Endomorph membutuhkan kalori lebih sedikit untuk diet
+        # Validasi rentang nilai
+        if not (10 <= umur <= 100):
+            return jsonify({'error': 'Age must be between 10 and 100'}), 400
+        if not (100 <= tb <= 250):
+            return jsonify({'error': 'Height must be between 100 and 250 cm'}), 400
+        if not (30 <= bb <= 300):
+            return jsonify({'error': 'Weight must be between 30 and 300 kg'}), 400
 
-    # Membuat objek user dengan data dari form dan hasil perhitungan BMR dan TDEE
-    user = User(
-        username=request.form['username'],
-        password=generate_password_hash(request.form['password']),
-        umur=umur,
-        tb=tb,
-        bb=bb,
-        tujuan=tujuan,
-        aktivitas=aktivitas,
-        gender=gender,
-        tipe_tubuh=tipe_tubuh,
-        bmr=bmr,
-        tdee=tdee
-    )
-    
-    # Menambahkan user ke dalam database
-    db.session.add(user)
-    db.session.commit()
+        # Hitung BMR menggunakan rumus Mifflin-St Jeor
+        if gender == 'laki_laki':
+            bmr = 10 * bb + 6.25 * tb - 5 * umur + 5
+        else:
+            bmr = 10 * bb + 6.25 * tb - 5 * umur - 161
 
-    # Menyimpan username ke session agar pengguna tetap login tanpa perlu login ulang
-    session['username'] = user.username
+        # Menentukan faktor aktivitas berdasarkan pilihan pengguna
+        activity_factors = {
+            'sangat_tidak_aktif': 1.2,
+            'aktivitas_ringan': 1.375,
+            'aktivitas_sedang': 1.55,
+            'aktivitas_berat': 1.725
+        }
+        
+        tdee = bmr * activity_factors.get(aktivitas, 1.375)
 
-    # Mengalihkan ke halaman dashboard pengguna
-    return redirect(url_for('dashboard', username=user.username))
+        # Penyesuaian berdasarkan tipe tubuh
+        body_type_factors = {
+            'ectomorph': 1.1,
+            'mesomorph': 1.0,
+            'endomorph': 0.9
+        }
+        
+        tdee *= body_type_factors.get(tipe_tubuh, 1.0)
+
+        # Membuat objek user
+        user = User(
+            username=request.form['username'],
+            password=generate_password_hash(request.form['password']),
+            umur=umur,
+            tb=tb,
+            bb=bb,
+            tujuan=tujuan,
+            aktivitas=aktivitas,
+            gender=gender,
+            tipe_tubuh=tipe_tubuh,
+            bmr=bmr,
+            tdee=tdee
+        )
+        
+        db.session.add(user)
+        db.session.commit()
+
+        session['username'] = user.username
+        return redirect(url_for('dashboard', username=user.username))
+        
+    except ValueError as e:
+        return jsonify({'error': 'Invalid input format'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # Fungsi untuk menambahkan pemisah ribuan
 @app.template_filter('format_number')
 def format_number(value):
     try:
         return "{:,.0f}".format(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return value
     
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            return render_template('login.html', error='Username and password are required')
+        
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
             session['username'] = user.username
             return redirect(url_for('dashboard', username=user.username))
-        return redirect(url_for('home'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+    
     return render_template('login.html')
 
 @app.route('/logout')
@@ -224,58 +278,92 @@ def logout():
 
 @app.route('/dashboard/<username>')
 def dashboard(username):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    
     user = User.query.filter_by(username=username).first_or_404()
+    
+    # Pastikan user hanya bisa akses dashboard sendiri
+    if session['username'] != username:
+        return redirect(url_for('dashboard', username=session['username']))
 
     # Ambil BMR dan TDEE dari database
-    bmr = user.bmr
-    tdee = user.tdee
+    bmr = user.bmr or 0
+    tdee = user.tdee or 0
 
     # Menentukan target kalori berdasarkan tujuan
     if user.tujuan == 'bulking':
-        target_calories = tdee + 500  # Menambah 500 kalori untuk bulking
-        target_protein = user.bb * 2  # Asumsi protein 15% dari total kalori
+        target_calories = tdee + 300  # Surplus kalori untuk bulking
+        target_protein = user.bb * 2.2  # Protein tinggi untuk bulking
     elif user.tujuan == 'cutting':
-        target_calories = tdee - 500  # Mengurangi 500 kalori untuk cutting
-        target_protein = user.bb * 2  # Asumsi protein 15% dari total kalori
-    else:
-        target_calories = tdee  # Target kalori tetap di TDEE untuk maintain
-        target_protein = user.bb * 1.6  # Asumsi protein 15% dari total kalori
+        target_calories = tdee - 300  # Defisit kalori untuk cutting
+        target_protein = user.bb * 2.5  # Protein tinggi untuk mempertahankan otot
+    else:  # maintain
+        target_calories = tdee  # Target kalori sesuai TDEE
+        target_protein = user.bb * 2.0  # Protein maintenance
     
-    # Mendapatkan makanan berdasarkan waktu makan
-    makanan_pagi = WaktuMakan.query.filter_by(waktu_makan='Pagi', user_id=user.id).all()
-    makanan_siang = WaktuMakan.query.filter_by(waktu_makan='Siang', user_id=user.id).all()
-    makanan_sore = WaktuMakan.query.filter_by(waktu_makan='Sore', user_id=user.id).all()
-    makanan_malam = WaktuMakan.query.filter_by(waktu_makan='Malam', user_id=user.id).all()
-
-    # Fungsi untuk menghitung total protein dan kalori berdasarkan waktu makan
-    def total(waktu_list):
-        return sum(w.food.protein for w in waktu_list if w.food.input_from == 'input makanan'), \
-               sum(w.food.kalori  for w in waktu_list if w.food.input_from == 'input makanan')
-
-    # Total keseluruhan dari semua makanan yang diinput
-    total_protein_input = sum(f.protein for f in user.foods if f.input_from == 'input makanan')
-    total_kalori_input = sum(f.kalori  for f in user.foods if f.input_from == 'input makanan')
-
-    # Total per waktu makan
-    total_protein_pagi, total_kalori_pagi = total(makanan_pagi)
-    total_protein_siang, total_kalori_siang = total(makanan_siang)
-    total_protein_sore, total_kalori_sore = total(makanan_sore)
-    total_protein_malam, total_kalori_malam = total(makanan_malam)
+    # Ambil data makanan hari ini
+    today = datetime.now().date()
     
-     # Menghitung progress terhadap target kalori dan protein
-    progress_calories = round((total_kalori_input / target_calories) * 100, 1)  # Round to 1 decimal
-    progress_protein = round((total_protein_input / target_protein) * 100, 1)  # Round to 1 decimal
+    # Query makanan berdasarkan waktu makan untuk hari ini
+    makanan_pagi = WaktuMakan.query.join(Food).filter(
+        WaktuMakan.waktu_makan == 'Pagi',
+        WaktuMakan.user_id == user.id,
+        WaktuMakan.tanggal == today,
+        Food.input_from == 'input makanan'
+    ).all()
+    
+    makanan_siang = WaktuMakan.query.join(Food).filter(
+        WaktuMakan.waktu_makan == 'Siang',
+        WaktuMakan.user_id == user.id,
+        WaktuMakan.tanggal == today,
+        Food.input_from == 'input makanan'
+    ).all()
+    
+    makanan_sore = WaktuMakan.query.join(Food).filter(
+        WaktuMakan.waktu_makan == 'Sore',
+        WaktuMakan.user_id == user.id,
+        WaktuMakan.tanggal == today,
+        Food.input_from == 'input makanan'
+    ).all()
+    
+    makanan_malam = WaktuMakan.query.join(Food).filter(
+        WaktuMakan.waktu_makan == 'Malam',
+        WaktuMakan.user_id == user.id,
+        WaktuMakan.tanggal == today,
+        Food.input_from == 'input makanan'
+    ).all()
 
-    # Status apakah target tercapai atau belum
+    # Fungsi untuk menghitung total protein dan kalori
+    def calculate_total(waktu_list):
+        protein_total = sum((w.food.protein or 0) for w in waktu_list)
+        kalori_total = sum((w.food.kalori or 0) for w in waktu_list)
+        return protein_total, kalori_total
+
+    # Hitung total per waktu makan
+    total_protein_pagi, total_kalori_pagi = calculate_total(makanan_pagi)
+    total_protein_siang, total_kalori_siang = calculate_total(makanan_siang)
+    total_protein_sore, total_kalori_sore = calculate_total(makanan_sore)
+    total_protein_malam, total_kalori_malam = calculate_total(makanan_malam)
+    
+    # Total keseluruhan hari ini
+    total_protein_input = total_protein_pagi + total_protein_siang + total_protein_sore + total_protein_malam
+    total_kalori_input = total_kalori_pagi + total_kalori_siang + total_kalori_sore + total_kalori_malam
+    
+    # Menghitung progress
+    progress_calories = min(round((total_kalori_input / target_calories) * 100, 1), 100) if target_calories > 0 else 0
+    progress_protein = min(round((total_protein_input / target_protein) * 100, 1), 100) if target_protein > 0 else 0
+
+    # Status target
     target_status_calories = "Sudah tercapai" if total_kalori_input >= target_calories else "Belum tercapai"
     target_status_protein = "Sudah tercapai" if total_protein_input >= target_protein else "Belum tercapai"
 
     return render_template('dashboard.html',
                            user=user,
-                           bmr=round(bmr),  # Menampilkan BMR dengan pembulatan
-                           tdee=round(tdee),  # Menampilkan TDEE dengan pembulatan
-                           target_calories=round(target_calories),  # Menampilkan target kalori dengan pembulatan
-                           target_protein=round(target_protein),  # Menampilkan target protein dengan pembulatan
+                           bmr=int(round(bmr)),
+                           tdee=int(round(tdee)),
+                           target_calories=int(round(target_calories)),
+                           target_protein=int(round(target_protein)),
                            total_protein_input_makanan=total_protein_input,
                            total_kalori_input_makanan=total_kalori_input,
                            total_protein_pagi=total_protein_pagi,
@@ -295,239 +383,256 @@ def dashboard(username):
                            target_status_calories=target_status_calories,
                            target_status_protein=target_status_protein)
 
-
 @app.route('/input_makanan/<username>', methods=['GET', 'POST'])
 def input_makanan(username):
     if 'username' not in session:
-        return redirect(url_for('home'))  # Pastikan user sudah login
+        return redirect(url_for('login'))
 
     user = User.query.filter_by(username=session['username']).first()
+    if not user:
+        return redirect(url_for('login'))
 
     if request.method == 'POST':
-        nama_makanan = request.form['nama_makanan']
-        porsi = request.form['porsi']
-        if not nama_makanan or not porsi or int(porsi) <= 0:
-            # Jika nama makanan kosong atau porsi kurang dari 1, tampilkan pesan error
-            return jsonify({'status': 'error', 'message': 'Pastikan nama makanan valid dan porsi lebih dari 0.'}), 400
+        try:
+            nama_makanan = request.form.get('nama_makanan', '').strip()
+            porsi = request.form.get('porsi', '0')
+            protein = request.form.get('protein', '0')
+            kalori = request.form.get('kalori', '0')
+            waktu_makan = request.form.get('waktu_makan', '')
 
-        f = Food(
-            nama_makanan=nama_makanan,
-            porsi=int(porsi),
-            protein=int(request.form['protein']),
-            kalori=int(request.form['kalori']),
-            user_id=user.id,
-            input_from="input makanan"
-        )
-        db.session.add(f)
-        db.session.commit()
+            # Validasi input
+            if not nama_makanan or not porsi or int(porsi) <= 0:
+                return jsonify({'status': 'error', 'message': 'Nama makanan dan porsi harus valid'}), 400
 
-        db.session.add(WaktuMakan(
-            waktu_makan=request.form['waktu_makan'],
-            food_id=f.id,
-            user_id=user.id
-        ))
-        db.session.commit()
+            # Buat food entry
+            f = Food(
+                nama_makanan=nama_makanan,
+                porsi=int(porsi),
+                protein=int(protein),
+                kalori=int(kalori),
+                user_id=user.id,
+                input_from="input makanan"
+            )
+            db.session.add(f)
+            db.session.commit()
 
-        return redirect(url_for('dashboard', username=username))
+            # Buat waktu makan entry
+            waktu_makan_entry = WaktuMakan(
+                waktu_makan=waktu_makan,
+                food_id=f.id,
+                user_id=user.id,
+                tanggal=datetime.now().date()
+            )
+            db.session.add(waktu_makan_entry)
+            db.session.commit()
 
-    # Mengambil semua data makanan berdasarkan user yang sedang login
+            return redirect(url_for('dashboard', username=username))
+        
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    # GET request - tampilkan form
     foods_data = [f.to_dict() for f in Food.query.filter_by(input_from="tambah data").all()]
-    
     return render_template('input_makanan.html', user=user, foods_data=foods_data)
 
 @app.route('/submit_to_dashboard', methods=['POST'])
 def submit_to_dashboard():
+    if 'username' not in session:
+        return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
     try:
-        # Mendapatkan data JSON dari request
-        data = request.get_json(force=True)
-        # Mengambil pengguna berdasarkan session yang login
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data received'}), 400
+
         user = User.query.filter_by(username=session.get('username')).first_or_404()
+        today = datetime.now().date()
 
         for item in data:
-            # Memastikan data makanan dimasukkan dengan benar
+            # Validasi item
+            required_keys = ['nama_makanan', 'porsi', 'protein', 'kalori', 'waktu_makan']
+            if not all(key in item for key in required_keys):
+                continue
+
+            # Create food entry
             f = Food(
                 nama_makanan=item['nama_makanan'],
                 porsi=int(item['porsi']),
-                protein=int(re.sub(r'\D', '', item['protein'])),  # Mengambil angka saja dari input
-                kalori=int(re.sub(r'\D', '', item['kalori'])),    # Mengambil angka saja dari input
-                user_id=user.id,  # Menambahkan user_id
+                protein=int(re.sub(r'\D', '', str(item['protein']))),
+                kalori=int(re.sub(r'\D', '', str(item['kalori']))),
+                user_id=user.id,
                 input_from="input makanan",
-                image=item['image']  # Menyimpan gambar makanan jika ada
+                image=item.get('image', '')
             )
             db.session.add(f)
-            db.session.commit()  # Commit setelah menambah food
+            db.session.flush()  # Flush to get the ID
 
-            # Memasukkan data waktu makan untuk makanan yang diinput
-            db.session.add(WaktuMakan(
+            # Create waktu makan entry
+            waktu_makan_entry = WaktuMakan(
                 waktu_makan=item['waktu_makan'],
-                food_id=f.id,  # Referensi ke food yang baru saja ditambahkan
-                user_id=user.id  # Menambahkan user_id ke waktu_makan untuk mengaitkan ke pengguna
-            ))
+                food_id=f.id,
+                user_id=user.id,
+                tanggal=today
+            )
+            db.session.add(waktu_makan_entry)
         
-        # Commit perubahan
         db.session.commit()
         return jsonify({'status': 'success'}), 200
 
     except Exception as e:
-        # Jika terjadi error, rollback untuk membatalkan perubahan
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/tambah_data/<username>', methods=['GET', 'POST'])
 def tambah_data(username):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
     user = User.query.filter_by(username=username).first_or_404()
 
     if request.method == 'POST':
-        nama_makanan = request.form['nama_makanan']
-        protein = int(request.form['protein'])
-        kalori = int(request.form['kalori'])
-        file = request.files['food_image']
+        try:
+            nama_makanan = request.form.get('nama_makanan', '').strip()
+            protein = request.form.get('protein', '0')
+            kalori = request.form.get('kalori', '0')
 
-        filename = None
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            if not nama_makanan:
+                return jsonify({'error': 'Nama makanan wajib diisi'}), 400
 
-        f = Food(
-            nama_makanan=nama_makanan,
-            protein=protein,
-            kalori=kalori,
-            image=filename,
-            user_id=None,
-            input_from="tambah data"
-        )
-        db.session.add(f)
-        db.session.commit()
+            # Handle file upload
+            filename = None
+            if 'food_image' in request.files:
+                file = request.files['food_image']
+                if file and file.filename and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    timestamp = str(int(datetime.now().timestamp()))
+                    name, ext = os.path.splitext(filename)
+                    filename = f"{name}_{timestamp}{ext}"
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-        return redirect(url_for('input_makanan', username=username))
+            f = Food(
+                nama_makanan=nama_makanan,
+                protein=int(protein),
+                kalori=int(kalori),
+                image=filename,
+                user_id=None,
+                input_from="tambah data"
+            )
+            db.session.add(f)
+            db.session.commit()
+
+            return redirect(url_for('input_makanan', username=username))
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
 
     return render_template('tambah_data.html', user=user)
 
-# Route untuk Laporan
 @app.route('/laporan/<username>', methods=['GET'])
 def laporan(username):
-    # Menemukan pengguna berdasarkan username
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
     user = User.query.filter_by(username=username).first_or_404()
-
-    # Mengambil laporan berdasarkan user_id dan urutkan berdasarkan tanggal
-    laporan_data = Laporan.query.filter_by(user_id=user.id).order_by(Laporan.tanggal.desc()).all()
-
-    # Jika tidak ada laporan, beri pesan atau tampilkan halaman kosong
-    if laporan_data is None:
-        return render_template('laporan.html', user=user, laporan_data=None, message="Tidak ada laporan yang tersedia.")
     
-    # Menampilkan laporan dalam bentuk tabel
+    # Ambil laporan berdasarkan user_id dan urutkan berdasarkan tanggal
+    laporan_data = Laporan.query.filter_by(user_id=user.id).order_by(Laporan.tanggal.desc()).all()
+    
     return render_template('laporan.html', user=user, laporan_data=laporan_data)
-
 
 @app.route('/submit_laporan/<username>', methods=['POST'])
 def submit_laporan(username):
-    # Logika untuk submit laporan
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
     user = User.query.filter_by(username=username).first_or_404()
+    today = datetime.now().date()
 
-    # Ambil data makanan berdasarkan waktu makan
-    makanan_pagi = WaktuMakan.query.filter_by(waktu_makan='Pagi').all()
-    makanan_siang = WaktuMakan.query.filter_by(waktu_makan='Siang').all()
-    makanan_sore = WaktuMakan.query.filter_by(waktu_makan='Sore').all()
-    makanan_malam = WaktuMakan.query.filter_by(waktu_makan='Malam').all()
+    try:
+        # Ambil semua makanan hari ini
+        waktu_makan_hari_ini = WaktuMakan.query.join(Food).filter(
+            WaktuMakan.user_id == user.id,
+            WaktuMakan.tanggal == today,
+            Food.input_from == 'input makanan'
+        ).all()
 
-    # Hitung total protein dan kalori per waktu makan
-    def total(waktu_list):
-        return sum(w.food.protein for w in waktu_list if w.food.input_from == 'input makanan'), \
-               sum(w.food.kalori for w in waktu_list if w.food.input_from == 'input makanan')
+        # Hitung total protein dan kalori
+        total_protein = sum(w.food.protein * w.food.porsi for w in waktu_makan_hari_ini)
+        total_kalori = sum(w.food.kalori * w.food.porsi for w in waktu_makan_hari_ini)
 
-    total_protein_pagi, total_kalori_pagi = total(makanan_pagi)
-    total_protein_siang, total_kalori_siang = total(makanan_siang)
-    total_protein_sore, total_kalori_sore = total(makanan_sore)
-    total_protein_malam, total_kalori_malam = total(makanan_malam)
+        # Buat laporan
+        laporan = Laporan(
+            user_id=user.id,
+            waktu_makan='Hari Ini',
+            total_protein=total_protein,
+            total_kalori=total_kalori,
+            tanggal=datetime.now()
+        )
 
-    # Hitung total keseluruhan
-    total_protein = total_protein_pagi + total_protein_siang + total_protein_sore + total_protein_malam
-    total_kalori = total_kalori_pagi + total_kalori_siang + total_kalori_sore + total_kalori_malam
+        db.session.add(laporan)
+        db.session.commit()
 
-    # Menyimpan data laporan ke database
-    laporan = Laporan(
-        user_id=user.id,
-        waktu_makan='Hari Ini',  # Bisa diperinci berdasarkan waktu makan
-        total_protein=total_protein,
-        total_kalori=total_kalori
-    )
-
-    db.session.add(laporan)
-    db.session.commit()
-
-    # Redirect setelah data laporan disubmit
-    return redirect(url_for('laporan', username=username))
+        return redirect(url_for('laporan', username=username))
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/reset_and_report', methods=['POST'])
 def reset_and_report():
-    today = datetime.utcnow().date()
-
-    # Ambil semua data makanan hari ini (untuk user yang login)
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
     user = User.query.filter_by(username=session['username']).first_or_404()
+    today = datetime.now().date()
 
-    # Mengambil makanan yang dimasukkan hari ini
-    makanan_hari_ini = WaktuMakan.query.join(Food).filter(Food.user_id == user.id, Food.input_from == 'input makanan').all()
+    try:
+        # Ambil makanan hari ini
+        waktu_makan_hari_ini = WaktuMakan.query.join(Food).filter(
+            WaktuMakan.user_id == user.id,
+            WaktuMakan.tanggal == today,
+            Food.input_from == 'input makanan'
+        ).all()
 
-    # Menghitung total protein dan kalori untuk laporan
-    total_protein = sum(w.food.protein * w.food.porsi for w in makanan_hari_ini)
-    total_kalori = sum(w.food.kalori * w.food.porsi for w in makanan_hari_ini)
+        if waktu_makan_hari_ini:
+            # Hitung total
+            total_protein = sum(w.food.protein * w.food.porsi for w in waktu_makan_hari_ini)
+            total_kalori = sum(w.food.kalori * w.food.porsi for w in waktu_makan_hari_ini)
 
-    # Menambahkan laporan ke dalam database
-    laporan = Laporan(
-        user_id=user.id,
-        waktu_makan='Hari Ini',  # Bisa lebih spesifik jika diinginkan
-        total_protein=total_protein,
-        total_kalori=total_kalori
-    )
-    db.session.add(laporan)
-    db.session.commit()
+            # Buat laporan
+            laporan = Laporan(
+                user_id=user.id,
+                waktu_makan='Hari Ini',
+                total_protein=total_protein,
+                total_kalori=total_kalori,
+                tanggal=datetime.now()
+            )
+            db.session.add(laporan)
 
-    # Hapus data makanan hari ini
-    db.session.query(WaktuMakan).filter(Food.user_id == user.id).delete()
-    db.session.query(Food).filter(Food.user_id == user.id, Food.input_from == 'input makanan').delete()
-    db.session.commit()
+            # Hapus data hari ini
+            for w in waktu_makan_hari_ini:
+                db.session.delete(w.food)
+                db.session.delete(w)
 
-    # Redirect ke halaman laporan atau dashboard setelah reset
-    return redirect(url_for('laporan', username=user.username))
+            db.session.commit()
 
-# Fungsi reset otomatis setiap 24 jam
-def reset_daily():
-    today = datetime.utcnow().date()
+        return redirect(url_for('laporan', username=user.username))
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
-    # Ambil semua data makanan hari ini (untuk user yang login)
-    user = User.query.filter_by(username=session['username']).first_or_404()
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return redirect(url_for('login'))
 
-    # Mengambil makanan yang dimasukkan hari ini
-    makanan_hari_ini = WaktuMakan.query.join(Food).filter(Food.user_id == user.id, Food.input_from == 'input makanan').all()
-
-    # Menghitung total protein dan kalori untuk laporan
-    total_protein = sum(w.food.protein * w.food.porsi for w in makanan_hari_ini)
-    total_kalori = sum(w.food.kalori * w.food.porsi for w in makanan_hari_ini)
-
-    # Menambahkan laporan ke dalam database
-    laporan = Laporan(
-        user_id=user.id,
-        waktu_makan='Hari Ini',  # Bisa lebih spesifik jika diinginkan
-        total_protein=total_protein,
-        total_kalori=total_kalori
-    )
-    db.session.add(laporan)
-    db.session.commit()
-
-    # Hapus data makanan hari ini
-    db.session.query(WaktuMakan).filter(Food.user_id == user.id).delete()
-    db.session.query(Food).filter(Food.user_id == user.id, Food.input_from == 'input makanan').delete()
-    db.session.commit()
-
-    # Redirect ke halaman laporan atau dashboard setelah reset
-    return redirect(url_for('laporan', username=user.username))
-
-# Scheduler untuk reset otomatis setiap 24 jam
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=reset_daily, trigger="interval", hours=24)
-scheduler.start()
-
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

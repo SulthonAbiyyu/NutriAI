@@ -3,188 +3,713 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Nutri AI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='sidebar.css') }}">
+    <title>Dashboard - Nutri AI</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .logo i {
+            background: linear-gradient(45deg, #ff6b35, #f9a825);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 80px;
+            left: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 90;
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            text-decoration: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 140px 2rem 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .profile-icon {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .calories-icon {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+
+        .protein-icon {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+        }
+
+        .food-icon {
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-subtitle {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 1rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .calories-progress {
+            background: linear-gradient(90deg, #f093fb, #f5576c);
+        }
+
+        .protein-progress {
+            background: linear-gradient(90deg, #4facfe, #00f2fe);
+        }
+
+        .progress-text {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Body Type Section */
+        .body-type-section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .body-types {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .body-type-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .body-type-card.selected {
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .body-type-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .ectomorph-icon {
+            background: linear-gradient(135deg, #ffecd2, #fcb69f);
+        }
+
+        .mesomorph-icon {
+            background: linear-gradient(135deg, #a8edea, #fed6e3);
+        }
+
+        .endomorph-icon {
+            background: linear-gradient(135deg, #ffd89b, #19547b);
+        }
+
+        .body-type-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .body-type-desc {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.4;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            margin-top: 3rem;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 1rem 2rem;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .scan-btn {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            border: none;
+        }
+
+        .report-btn {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            border: none;
+        }
+
+        .settings-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+        }
+
+        /* Food Items */
+        .food-items {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .food-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+
+        .food-item-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .food-item-info {
+            flex: 1;
+        }
+
+        .food-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .food-details {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .add-food {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .add-food:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                position: static;
+                margin-bottom: 2rem;
+                flex-wrap: wrap;
+            }
+            
+            .main-content {
+                padding: 100px 1rem 2rem;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .body-types {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-
-    <!-- =========== SIDEBAR =========== -->
-    {% include 'sidebar.html' %}
-
-    <!-- =========== MAIN CONTENT =========== -->
-    <div class="main-content">
-
-        <!-- Header -->
-        <header class="header">
-            <h1>Hello, {{ user.username }}</h1>
-            <p><strong>Target: {{ user.tujuan }}</strong></p>
-            <div class="bmr-tdee-info">
-                <p><strong>BMR (Basal Metabolic Rate):</strong> {{ user.bmr|round(0)|int | format_number }} kcal/hari</p>
-                <p class="info-text">BMR adalah jumlah kalori yang dibutuhkan tubuh Anda untuk menjalankan fungsi dasar tubuh seperti bernapas dan mempertahankan suhu tubuh, tanpa aktivitas fisik.</p>
-
-                <p><strong>TDEE (Total Daily Energy Expenditure):</strong> {{ user.tdee|round(0)|int | format_number }} kcal/hari</p>
-                <p class="info-text">TDEE adalah total kalori yang dibakar tubuh Anda dalam sehari, termasuk kalori yang dibakar selama aktivitas fisik.</p>
-
-                <p><strong>Target Kalori Harian ({{ user.tujuan }}):</strong> {{ "{:,.0f}".format(target_calories) }} kcal/hari</p>
-                <p class="info-text">Target kalori yang perlu Anda konsumsi untuk mencapai tujuan Anda.</p>
-
-                <p><strong>Target Protein Harian ({{ user.tujuan }}):</strong> {{ "{:,.0f}".format(target_protein) }} g/hari</p>
-                <p class="info-text">Target protein harian yang diperlukan untuk mendukung tujuan Anda.</p>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            Nutri AI
+        </div>
+        <div class="user-info">
+            <span>Hello, {{ user.username if user else 'E' }}!</span>
+            <div class="user-avatar">
+                {% if user and user.profile_picture %}
+                    <img src="{{ url_for('uploaded_file', filename=user.profile_picture) }}" alt="Profile">
+                {% else %}
+                    <i class="fas fa-user"></i>
+                {% endif %}
             </div>
+        </div>
+    </header>
 
-            <!-- Progress Bar untuk Kalori -->
-            <div class="progress-container">
-                <h3>Progress Kalori</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {{ progress_calories }}%; background-color: {{ 'green' if progress_calories >= 100 else 'orange' }};">
-                        <span class="progress-text">{{ progress_calories | round(1) }}%</span>
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="/dashboard/{{ user.username }}" class="nav-item active">
+            <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="/input_makanan/{{ user.username }}" class="nav-item">
+            <i class="fas fa-utensils"></i> Input Makanan
+        </a>
+        <a href="/laporan/{{ user.username }}" class="nav-item">
+            <i class="fas fa-file-alt"></i> Laporan
+        </a>
+        <a href="/tambah_data/{{ user.username }}" class="nav-item">
+            <i class="fas fa-plus"></i> Tambah Data
+        </a>
+        <a href="{{ url_for('profile', username=user.username) }}" class="nav-item">
+            <i class="fas fa-user"></i> Profil
+        </a>
+    </nav>
+
+    <div class="container">
+        <main class="main-content">
+            <!-- Dashboard Cards -->
+            <div class="dashboard-grid">
+                <!-- Profile Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon profile-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <h3 class="card-title">Profil Saya</h3>
+                    </div>
+                    <div class="card-value">{{ user.umur }}</div>
+                    <div class="card-subtitle">Umur (tahun)</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: rgba(255,255,255,0.8);">
+                        <span>{{ user.tb }} cm</span>
+                        <span>{{ user.bb }} kg</span>
+                    </div>
+                    <div class="card-subtitle" style="margin-top: 0.5rem;">Tinggi (cm) / Berat (kg)</div>
+                    <div class="progress-text" style="margin-top: 1rem; padding: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center;">
+                        {{ user.tujuan.title() }}
                     </div>
                 </div>
-                <p>{{ target_status_calories }}</p>
-            </div>
 
-            <!-- Progress Bar untuk Protein -->
-            <div class="progress-container">
-                <h3>Progress Protein</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {{ progress_protein }}%; background-color: {{ 'green' if progress_protein >= 100 else 'orange' }};">
-                        <span class="progress-text">{{ progress_protein | round(1) }}%</span>
+                <!-- Calories Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon calories-icon">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <h3 class="card-title">Progress Kalori</h3>
+                    </div>
+                    <div class="card-value">{{ total_kalori_input_makanan }}</div>
+                    <div class="card-subtitle">Kalori Harian / {{ target_calories }} kcal</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill calories-progress" style="width: {{ progress_calories if progress_calories <= 100 else 100 }}%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>BMR: {{ bmr }} kcal</span>
+                            <span>TDEE: {{ tdee }} kcal</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 0.5rem; font-weight: 600;">
+                            {% if progress_calories >= 100 %}
+                                Target tercapai untuk menurunkan berat Anda
+                            {% else %}
+                                Target protein untuk mendukung tujuan cutting Anda
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-                <p>{{ target_status_protein }}</p>
+
+                <!-- Protein Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon protein-icon">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <h3 class="card-title">Progress Protein</h3>
+                    </div>
+                    <div class="card-value">{{ total_protein_input_makanan }}</div>
+                    <div class="card-subtitle">Protein Harian / {{ target_protein }} g</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill protein-progress" style="width: {{ progress_protein if progress_protein <= 100 else 100 }}%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        {% if progress_protein >= 100 %}
+                            Target protein untuk mendukung tujuan cutting Anda
+                        {% else %}
+                            Target protein untuk mendukung tujuan cutting Anda
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Today's Food -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon food-icon">
+                            <i class="fas fa-apple-alt"></i>
+                        </div>
+                        <h3 class="card-title">Makanan Hari Ini</h3>
+                    </div>
+                    <div class="food-items">
+                        {% if makanan_pagi or makanan_siang or makanan_sore or makanan_malam %}
+                            {% for waktu_makan in makanan_pagi %}
+                                <div class="food-item">
+                                    <div class="food-item-icon">
+                                        <i class="fas fa-bowl-rice"></i>
+                                    </div>
+                                    <div class="food-item-info">
+                                        <div class="food-name">{{ waktu_makan.food.nama_makanan }}</div>
+                                        <div class="food-details">{{ waktu_makan.food.porsi }} porsi • {{ waktu_makan.food.protein }}g protein</div>
+                                    </div>
+                                    <div style="background: rgba(255,193,7,0.2); padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.8rem;">
+                                        {{ waktu_makan.food.kalori }} kcal
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                            {% for waktu_makan in makanan_siang %}
+                                <div class="food-item">
+                                    <div class="food-item-icon" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);">
+                                        <i class="fas fa-drumstick-bite"></i>
+                                    </div>
+                                    <div class="food-item-info">
+                                        <div class="food-name">{{ waktu_makan.food.nama_makanan }}</div>
+                                        <div class="food-details">{{ waktu_makan.food.porsi }} porsi • {{ waktu_makan.food.protein }}g protein</div>
+                                    </div>
+                                    <div style="background: rgba(40,167,69,0.2); padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.8rem;">
+                                        {{ waktu_makan.food.kalori }} kcal
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                            {% for waktu_makan in makanan_sore %}
+                                <div class="food-item">
+                                    <div class="food-item-icon" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);">
+                                        <i class="fas fa-drumstick-bite"></i>
+                                    </div>
+                                    <div class="food-item-info">
+                                        <div class="food-name">{{ waktu_makan.food.nama_makanan }}</div>
+                                        <div class="food-details">{{ waktu_makan.food.porsi }} porsi • {{ waktu_makan.food.protein }}g protein</div>
+                                    </div>
+                                    <div style="background: rgba(40,167,69,0.2); padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.8rem;">
+                                        {{ waktu_makan.food.kalori }} kcal
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                            {% for waktu_makan in makanan_malam %}
+                                <div class="food-item">
+                                    <div class="food-item-icon" style="background: linear-gradient(135deg, #ff9a9e, #fecfef);">
+                                        <i class="fas fa-drumstick-bite"></i>
+                                    </div>
+                                    <div class="food-item-info">
+                                        <div class="food-name">{{ waktu_makan.food.nama_makanan }}</div>
+                                        <div class="food-details">{{ waktu_makan.food.porsi }} porsi • {{ waktu_makan.food.protein }}g protein</div>
+                                    </div>
+                                    <div style="background: rgba(40,167,69,0.2); padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.8rem;">
+                                        {{ waktu_makan.food.kalori }} kcal
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="add-food" onclick="window.location.href='/input_makanan/{{ user.username }}'">
+                                <i class="fas fa-plus" style="margin-bottom: 0.5rem;"></i>
+                                <div>+ Tambah Makanan</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-        </header>
 
-        <!-- Rincian per waktu makan -->
-        <section class="food-list">
-            <h2>Makanan Hari Ini :</h2>
+            <!-- Body Type Section -->
+            <div class="body-type-section">
+                <h2 class="section-title">
+                    <i class="fas fa-user-cog"></i>
+                    Tipe Tubuh
+                </h2>
+                <div class="body-types">
+                    <div class="body-type-card {{ 'selected' if user.tipe_tubuh == 'ectomorph' else '' }}">
+                        <div class="body-type-icon ectomorph-icon">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div class="body-type-title">Ectomorph</div>
+                        <div class="body-type-desc">Tubuh ramping, sulit menambah berat</div>
+                    </div>
+                    <div class="body-type-card {{ 'selected' if user.tipe_tubuh == 'mesomorph' else '' }}">
+                        <div class="body-type-icon mesomorph-icon">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <div class="body-type-title">Mesomorph</div>
+                        <div class="body-type-desc">Tubuh atletis, mudah menambah otot</div>
+                    </div>
+                    <div class="body-type-card {{ 'selected' if user.tipe_tubuh == 'endomorph' else '' }}">
+                        <div class="body-type-icon endomorph-icon">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <div class="body-type-title">Endomorph</div>
+                        <div class="body-type-desc">Tubuh lebih berisi, mudah menambah lemak</div>
+                    </div>
+                </div>
+            </div>
 
-            {% if not (makanan_pagi or makanan_siang or makanan_sore or makanan_malam) %}
-                <!-- Jika tidak ada makanan sama sekali -->
-                <p>Anda belum makan apa-apa hari ini, klik Input Makanan.</p>
-            {% else %}
-                {% if makanan_pagi %}
-                    <h3 style="margin-top: 20px;">Waktu Makan - Pagi</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nama Makanan</th>
-                                <th>Porsi</th>
-                                <th>Protein</th>
-                                <th>Kalori</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for food in makanan_pagi %}
-                            <tr>
-                                <td style="text-align: center; display: flex; flex-direction: row; justify-content: center; align-items: center;"> 
-                                    <img src="{{ url_for('uploaded_file', filename=food.food.image) }}" alt="Food Image" style="max-width: 90px; max-height: 90px;">
-                                    <span>{{ food.food.nama_makanan }}</span>
-                                </td>
-                                <td>{{ food.food.porsi }}</td>
-                                <td>{{ food.food.protein }}g</td>
-                                <td>{{ food.food.kalori }} kcal</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <p><strong>Total Protein Pagi:</strong> {{ total_protein_pagi }}g</p>
-                    <p><strong>Total Kalori Pagi:</strong> {{ total_kalori_pagi }} kcal</p>
-                {% endif %}
-
-                {% if makanan_siang %}
-                    <h3 style="margin-top: 20px;">Waktu Makan - Siang</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nama Makanan</th>
-                                <th>Porsi</th>
-                                <th>Protein</th>
-                                <th>Kalori</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for food in makanan_siang %}
-                            <tr>
-                                <td style="text-align: center; display: flex; flex-direction: row; justify-content: center; align-items: center;"> 
-                                    <img src="{{ url_for('uploaded_file', filename=food.food.image) }}" alt="Food Image" style="max-width: 90px; max-height: 90px;">
-                                    <span>{{ food.food.nama_makanan }}</span>
-                                </td>
-                                <td>{{ food.food.porsi }}</td>
-                                <td>{{ food.food.protein }}g</td>
-                                <td>{{ food.food.kalori }} kcal</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <p><strong>Total Protein Siang:</strong> {{ total_protein_siang }}g</p>
-                    <p><strong>Total Kalori Siang:</strong> {{ total_kalori_siang }} kcal</p>
-                {% endif %}
-
-                {% if makanan_sore %}
-                    <h3 style="margin-top: 20px;">Waktu Makan - Sore</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nama Makanan</th>
-                                <th>Porsi</th>
-                                <th>Protein</th>
-                                <th>Kalori</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for food in makanan_sore %}
-                            <tr>
-                                <td style="text-align: center; display: flex; flex-direction: row; justify-content: center; align-items: center;"> 
-                                    <img src="{{ url_for('uploaded_file', filename=food.food.image) }}" alt="Food Image" style="max-width: 90px; max-height: 90px;">
-                                    <span>{{ food.food.nama_makanan }}</span>
-                                </td>
-                                <td>{{ food.food.porsi }}</td>
-                                <td>{{ food.food.protein }}g</td>
-                                <td>{{ food.food.kalori }} kcal</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <p><strong>Total Protein Sore:</strong> {{ total_protein_sore }}g</p>
-                    <p><strong>Total Kalori Sore:</strong> {{ total_kalori_sore }} kcal</p>
-                {% endif %}
-
-                {% if makanan_malam %}
-                    <h3 style="margin-top: 20px;">Waktu Makan - Malam</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nama Makanan</th>
-                                <th>Porsi</th>
-                                <th>Protein</th>
-                                <th>Kalori</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for food in makanan_malam %}
-                            <tr>
-                                <td style="text-align: center; display: flex; flex-direction: row; justify-content: center; align-items: center;"> 
-                                    <img src="{{ url_for('uploaded_file', filename=food.food.image) }}" alt="Food Image" style="max-width: 90px; max-height: 90px;">
-                                    <span>{{ food.food.nama_makanan }}</span>
-                                </td>
-                                <td>{{ food.food.porsi }}</td>
-                                <td>{{ food.food.protein }}g</td>
-                                <td>{{ food.food.kalori }} kcal</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <p><strong>Total Protein Malam:</strong> {{ total_protein_malam }}g</p>
-                    <p><strong>Total Kalori Malam:</strong> {{ total_kalori_malam }} kcal</p>
-                {% endif %}
-            {% endif %}
-        </section>
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="/input_makanan/{{ user.username }}" class="action-btn scan-btn">
+                    <i class="fas fa-camera"></i>
+                    Scan Makanan
+                </a>
+                <a href="/laporan/{{ user.username }}" class="action-btn report-btn">
+                    <i class="fas fa-chart-bar"></i>
+                    Lihat Laporan
+                </a>
+                <a href="{{ url_for('profile', username=user.username) }}" class="action-btn settings-btn">
+                    <i class="fas fa-cog"></i>
+                    Pengaturan
+                </a>
+            </div>
+        </main>
     </div>
-</div>
+
+    <script>
+        // Smooth animations on load
+        window.addEventListener('load', function() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.6s ease';
+                    
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 100);
+                }, index * 100);
+            });
+        });
+
+        // Progress bar animations
+        document.addEventListener('DOMContentLoaded', function() {
+            const progressBars = document.querySelectorAll('.progress-fill');
+            progressBars.forEach(bar => {
+                const width = bar.style.width;
+                bar.style.width = '0%';
+                setTimeout(() => {
+                    bar.style.width = width;
+                }, 500);
+            });
+        });
+    </script>
 </body>
 </html>

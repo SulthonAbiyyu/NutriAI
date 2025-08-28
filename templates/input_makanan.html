@@ -4,52 +4,339 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Input Makanan - Nutri AI</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
 
-    <!-- CSS kustom -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='input_makanan.css') }}">
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-form-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .food-search-wrapper {
+            position: relative;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .food-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .food-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .food-card img {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .food-card span {
+            color: white;
+            font-weight: 500;
+        }
+
+        .food-details {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .food-image-container {
+            margin-bottom: 1rem;
+        }
+
+        .food-image-container img {
+            width: 120px;
+            height: 120px;
+            border-radius: 16px;
+            object-fit: cover;
+            display: none;
+        }
+
+        .food-details p {
+            color: white;
+            font-size: 1.1rem;
+            margin: 0.5rem 0;
+        }
+
+        .keranjang {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .keranjang h3 {
+            color: white;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+
+        #keranjang-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: white;
+        }
+
+        #keranjang-table th {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+            text-align: left;
+            border-radius: 8px;
+        }
+
+        #keranjang-table td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            margin-right: 1rem;
+            vertical-align: middle;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .submit-btn {
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(79, 172, 254, 0.3);
+        }
+
+        .submit-btn.secondary {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 1rem;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .empty-cart {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .btn-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .submit-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="input-form-container">
-            <h2>Input Makanan</h2>
+    <a href="/dashboard/{{ user.username }}" class="back-btn">
+        <i class="fas fa-arrow-left"></i>
+    </a>
 
-            <!-- ========================= FORM ========================= -->
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-utensils"></i> Input Makanan</h1>
+            <p>Tambahkan makanan yang Anda konsumsi hari ini</p>
+        </div>
+
+        <div class="btn-container">
+            <button type="button" id="submitToDashboardBtn" class="submit-btn secondary" style="display: none;">
+                <i class="fas fa-paper-plane"></i>
+                Submit ke Dashboard
+            </button>
+        </div>
+    </div>
+
+    <div class="input-form-container">
             <form id="input-form">
                 <div class="form-row">
-
-                    <!-- ===================== NAMA MAKANAN + SEARCH ===================== -->
                     <div class="form-group food-search-wrapper">
-                        <label for="nama_makanan">Nama Makanan:</label>
-                        <input  type="text"
-                                id="nama_makanan"
-                                name="nama_makanan"
-                                placeholder="Ketik atau pilih makanan..."
-                                autocomplete="off"
-                                required>
-                        <!-- hasil pencarian muncul di sini -->
+                        <label for="nama_makanan"><i class="fas fa-search"></i> Nama Makanan:</label>
+                        <input type="text"
+                               id="nama_makanan"
+                               name="nama_makanan"
+                               placeholder="Ketik atau pilih makanan..."
+                               autocomplete="off"
+                               required>
                         <div id="search-results" class="search-results"></div>
                     </div>
 
-                    <!-- PORSI -->
                     <div class="form-group">
-                        <label for="porsi">Porsi:</label>
-                        <input type="number" id="porsi" name="porsi"
-                               placeholder="Jumlah porsi" required>
+                        <label for="porsi"><i class="fas fa-weight"></i> Porsi:</label>
+                        <input type="number" 
+                               id="porsi" 
+                               name="porsi"
+                               placeholder="Jumlah porsi" 
+                               min="1" 
+                               required>
                     </div>
 
-                    <!-- WAKTU MAKAN -->
                     <div class="form-group waktu-makan">
-                        <label for="waktu_makan">Waktu Makan:</label>
+                        <label for="waktu_makan"><i class="fas fa-clock"></i> Waktu Makan:</label>
                         <select name="waktu_makan" id="waktu_makan" required>
-                            <option value="Pagi">Pagi</option>
-                            <option value="Siang">Siang</option>
-                            <option value="Sore">Sore</option>
-                            <option value="Malam">Malam</option>
+                            <option value="">Pilih waktu makan</option>
+                            <option value="Pagi">🌅 Pagi</option>
+                            <option value="Siang">☀️ Siang</option>
+                            <option value="Sore">🌇 Sore</option>
+                            <option value="Malam">🌙 Malam</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- ========== RINCIAN MAKANAN YANG DIKLIK / DIPILIH ========== -->
                 <div class="food-details">
                     <div id="food-image-container" class="food-image-container">
                         <img id="food-image" src="" alt="Food Image">
@@ -59,68 +346,103 @@
                     <p id="food-kalori"></p>
                 </div>
 
-                <!-- ========== TABEL KERANJANG ========== -->
-                <div class="keranjang" id="keranjang">
-                    <h3>Keranjang Makanan</h3>
-                    <table id="keranjang-table">
-                        <thead>
-                            <tr>
-                                <th>Nama Makanan</th>
-                                <th>Porsi</th>
-                                <th>Protein</th>
-                                <th>Kalori</th>
-                            </tr>
-                        </thead>
-                        <tbody id="keranjang-list"></tbody>
-                    </table>
+                <div class="btn-container">
+                    <button type="button" id="addToCartBtn" class="submit-btn">
+                        <i class="fas fa-plus"></i>
+                        Tambah ke Keranjang
+                    </button>
                 </div>
-
-                <!-- tombol -->
-                <button type="button" id="addToCartBtn" class="submit-btn">Tambah ke Keranjang</button>
             </form>
-
-            <button type="button" id="submitToDashboardBtn" class="submit-btn">Submit ke Dashboard</button>
         </div>
-    </div>
 
-    <!-- ============================================================= -->
+        <div class="keranjang" id="keranjang">
+            <h3><i class="fas fa-shopping-cart"></i> Keranjang Makanan</h3>
+            <div id="cart-content">
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;"></i>
+                    <p>Keranjang masih kosong. Tambahkan makanan terlebih dahulu.</p>
+                </div>
+            </div>
+            <table id="keranjang-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th><i class="fas fa-utensils"></i> Nama Makanan</th>
+                        <th><i class="fas fa-weight"></i> Porsi</th>
+                        <th><i class="fas fa-dumbbell"></i> Protein</th>
+                        <th><i class="fas fa-fire"></i> Kalori</th>
+                        <th><i class="fas fa-clock"></i> Waktu</th>
+                        <th><i class="fas fa-trash"></i> Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="keranjang-list"></tbody>
+            </table>
+        </div>
+
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
         /* ---------- DATA ---------- */
-        const foodsData     = {{ foods_data | tojson }};
-        const baseImageUrl  = "{{ url_for('uploaded_file', filename='') }}";
+        const foodsData = {{ foods_data | tojson }};
+        const baseImageUrl = "{{ url_for('uploaded_file', filename='') }}";
 
         /* ---------- Elemen Utama ---------- */
-        const namaInput     = document.getElementById('nama_makanan');
-        const searchBox     = document.getElementById('search-results');
-        const foodImage     = document.getElementById('food-image');
-        const foodNameP     = document.getElementById('food-name');
-        const foodProteinP  = document.getElementById('food-protein');
-        const foodKaloriP   = document.getElementById('food-kalori');
-        const porsiInput    = document.getElementById('porsi');
-        const waktuSelect   = document.getElementById('waktu_makan');
+        const namaInput = document.getElementById('nama_makanan');
+        const searchBox = document.getElementById('search-results');
+        const foodImage = document.getElementById('food-image');
+        const foodNameP = document.getElementById('food-name');
+        const foodProteinP = document.getElementById('food-protein');
+        const foodKaloriP = document.getElementById('food-kalori');
+        const porsiInput = document.getElementById('porsi');
+        const waktuSelect = document.getElementById('waktu_makan');
         const keranjangList = document.getElementById('keranjang-list');
+        const keranjangTable = document.getElementById('keranjang-table');
+        const cartContent = document.getElementById('cart-content');
+        const submitBtn = document.getElementById('submitToDashboardBtn');
+
+        let cartItems = [];
 
         /* ---------- UTIL ---------- */
         function formatProtein(g){ return `${g} g`; }
         function formatKalori(k){ return `${k} kcal`; }
 
+        /* ---------- UPDATE CART DISPLAY ---------- */
+        function updateCartDisplay() {
+            if (cartItems.length === 0) {
+                keranjangTable.style.display = 'none';
+                cartContent.style.display = 'block';
+                submitBtn.style.display = 'none';
+            } else {
+                keranjangTable.style.display = 'table';
+                cartContent.style.display = 'none';
+                submitBtn.style.display = 'flex';
+            }
+        }
+
         /* ---------- RENDER HASIL PENCARIAN ---------- */
         function renderSearchResults(keyword){
             searchBox.innerHTML = '';
-            if(!keyword){ searchBox.style.display='none'; return; }
+            if(!keyword){ 
+                searchBox.style.display='none'; 
+                return; 
+            }
 
             const results = foodsData.filter(f =>
                 f.nama_makanan.toLowerCase().includes(keyword.toLowerCase())
             );
 
-            if(results.length === 0){ searchBox.style.display='none'; return; }
+            if(results.length === 0){ 
+                searchBox.style.display='none'; 
+                return; 
+            }
 
             results.forEach(food => {
                 const card = document.createElement('div');
                 card.className = 'food-card';
                 card.innerHTML = `
-                    <img src="${baseImageUrl}${food.image}" alt="">
-                    <span>${food.nama_makanan}</span>
+                    <img src="${baseImageUrl}${food.image}" alt="${food.nama_makanan}" onerror="this.style.display='none'">
+                    <div>
+                        <div style="font-weight: 600;">${food.nama_makanan}</div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">${food.protein}g protein • ${food.kalori} kcal</div>
+                    </div>
                 `;
                 card.onclick = () => selectFood(food);
                 searchBox.appendChild(card);
@@ -131,23 +453,44 @@
 
         /* ---------- PILIH MAKANAN DARI CARD ---------- */
         function selectFood(food){
-            namaInput.value           = food.nama_makanan;
-            foodImage.src             = baseImageUrl + food.image;
-            foodImage.style.display   = 'block';
-            foodNameP.textContent     = food.nama_makanan;
-            foodProteinP.textContent  = 'Protein: ' + formatProtein(food.protein);
-            foodKaloriP.textContent   = 'Kalori: '  + formatKalori(food.kalori);
-            searchBox.style.display   = 'none';
+            namaInput.value = food.nama_makanan;
+            
+            if (food.image) {
+                foodImage.src = baseImageUrl + food.image;
+                foodImage.style.display = 'block';
+            } else {
+                foodImage.style.display = 'none';
+            }
+            
+            foodNameP.textContent = food.nama_makanan;
+            foodNameP.style.fontWeight = '600';
+            foodNameP.style.fontSize = '1.3rem';
+            foodProteinP.textContent = '🥩 Protein: ' + formatProtein(food.protein);
+            foodKaloriP.textContent = '🔥 Kalori: ' + formatKalori(food.kalori);
+            searchBox.style.display = 'none';
+
+            // Set default porsi
+            if (!porsiInput.value) {
+                porsiInput.value = 1;
+            }
         }
 
         /* ---------- EVENT: KETIK NAMA ---------- */
         namaInput.addEventListener('input', e => {
-            const val  = e.target.value;
+            const val = e.target.value;
             renderSearchResults(val);
 
             /* jika mengetik nama persis, tampil rincian otomatis */
-            const food = foodsData.find(f => f.nama_makanan === val);
-            if(food){ selectFood(food); }
+            const food = foodsData.find(f => f.nama_makanan.toLowerCase() === val.toLowerCase());
+            if(food){ 
+                selectFood(food); 
+            } else {
+                // Clear details if no exact match
+                foodImage.style.display = 'none';
+                foodNameP.textContent = '';
+                foodProteinP.textContent = '';
+                foodKaloriP.textContent = '';
+            }
         });
 
         /* ---------- TUTUP LIST JIKA KLIK DI LUAR ---------- */
@@ -157,75 +500,187 @@
             }
         });
 
-        /* ---------- TOMBOL TAMBAH KE KERANJANG ---------- */
-        document.getElementById('addToCartBtn').onclick = () =>{
-            const namaMakanan = namaInput.value;
-            const porsi       = parseInt(porsiInput.value);
-            const waktuMakan  = waktuSelect.value;
-            const food        = foodsData.find(f => f.nama_makanan === namaMakanan);
+        /* ---------- REMOVE ITEM FROM CART ---------- */
+        function removeFromCart(index) {
+            cartItems.splice(index, 1);
+            renderCart();
+            updateCartDisplay();
+        }
 
-            if(food && porsi>0){
-                const totalProtein = food.protein * porsi;
-                const totalKalori  = food.kalori  * porsi;
-
+        /* ---------- RENDER CART ---------- */
+        function renderCart() {
+            keranjangList.innerHTML = '';
+            
+            cartItems.forEach((item, index) => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><img src="${baseImageUrl}${food.image}" alt="" class="thumb"> ${food.nama_makanan}</td>
-                    <td>${porsi}</td>
-                    <td>${formatProtein(totalProtein)}</td>
-                    <td>${formatKalori(totalKalori)}</td>
+                    <td>
+                        ${item.image ? `<img src="${baseImageUrl}${item.image}" alt="" class="thumb">` : '<i class="fas fa-utensils thumb" style="color: #4facfe; font-size: 1.5rem;"></i>'}
+                        ${item.nama_makanan}
+                    </td>
+                    <td>${item.porsi}</td>
+                    <td>${formatProtein(item.total_protein)}</td>
+                    <td>${formatKalori(item.total_kalori)}</td>
+                    <td>
+                        <span style="background: rgba(79,172,254,0.2); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.9rem;">
+                            ${item.waktu_makan}
+                        </span>
+                    </td>
+                    <td>
+                        <button onclick="removeFromCart(${index})" style="background: #f5576c; color: white; border: none; border-radius: 6px; padding: 0.5rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.background='#e73c49'" onmouseout="this.style.background='#f5576c'">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
                 `;
-
-                tr.dataset.nama    = food.nama_makanan;
-                tr.dataset.porsi   = porsi;
-                tr.dataset.protein = totalProtein;
-                tr.dataset.kalori  = totalKalori;
-                tr.dataset.waktu   = waktuMakan;
-                tr.dataset.image   = food.image;
-
                 keranjangList.appendChild(tr);
+            });
+        }
 
-                /* reset form */
-                document.getElementById('input-form').reset();
-                foodImage.style.display='none';
-                foodNameP.textContent = foodProteinP.textContent = foodKaloriP.textContent = '';
-            }else{
-                alert('Pastikan nama makanan valid dan porsi > 0');
+        /* ---------- TOMBOL TAMBAH KE KERANJANG ---------- */
+        document.getElementById('addToCartBtn').onclick = () => {
+            const namaMakanan = namaInput.value.trim();
+            const porsi = parseInt(porsiInput.value);
+            const waktuMakan = waktuSelect.value;
+            
+            if (!namaMakanan) {
+                alert('❌ Nama makanan tidak boleh kosong!');
+                namaInput.focus();
+                return;
             }
+            
+            if (!porsi || porsi <= 0) {
+                alert('❌ Porsi harus lebih dari 0!');
+                porsiInput.focus();
+                return;
+            }
+            
+            if (!waktuMakan) {
+                alert('❌ Pilih waktu makan terlebih dahulu!');
+                waktuSelect.focus();
+                return;
+            }
+
+            const food = foodsData.find(f => f.nama_makanan.toLowerCase() === namaMakanan.toLowerCase());
+
+            if (!food) {
+                alert('❌ Makanan tidak ditemukan dalam database. Silakan pilih dari daftar yang tersedia.');
+                namaInput.focus();
+                return;
+            }
+
+            const totalProtein = food.protein * porsi;
+            const totalKalori = food.kalori * porsi;
+
+            const cartItem = {
+                nama_makanan: food.nama_makanan,
+                porsi: porsi,
+                protein: food.protein,
+                kalori: food.kalori,
+                total_protein: totalProtein,
+                total_kalori: totalKalori,
+                waktu_makan: waktuMakan,
+                image: food.image
+            };
+
+            cartItems.push(cartItem);
+            renderCart();
+            updateCartDisplay();
+
+            // Reset form
+            document.getElementById('input-form').reset();
+            foodImage.style.display = 'none';
+            foodNameP.textContent = '';
+            foodProteinP.textContent = '';
+            foodKaloriP.textContent = '';
+
+            // Show success message
+            const addBtn = document.getElementById('addToCartBtn');
+            const originalText = addBtn.innerHTML;
+            addBtn.innerHTML = '<i class="fas fa-check"></i> Ditambahkan!';
+            addBtn.style.background = 'linear-gradient(135deg, #43e97b, #38f9d7)';
+            
+            setTimeout(() => {
+                addBtn.innerHTML = originalText;
+                addBtn.style.background = 'linear-gradient(135deg, #4facfe, #00f2fe)';
+            }, 2000);
         };
 
         /* ---------- SUBMIT KE DASHBOARD ---------- */
-        document.getElementById('submitToDashboardBtn').onclick = () =>{
-            const data=[];
-            document.querySelectorAll('#keranjang-list tr').forEach(row=>{
-                data.push({
-                    nama_makanan : row.dataset.nama,
-                    porsi        : row.dataset.porsi,
-                    protein      : row.dataset.protein,
-                    kalori       : row.dataset.kalori,
-                    waktu_makan  : row.dataset.waktu,
-                    image        : row.dataset.image
-                });
-            });
+        document.getElementById('submitToDashboardBtn').onclick = () => {
+            if (cartItems.length === 0) { 
+                alert('❌ Keranjang kosong! Tambahkan makanan terlebih dahulu.'); 
+                return; 
+            }
 
-            if(data.length===0){ alert('Keranjang kosong'); return; }
+            // Show loading state
+            const submitButton = document.getElementById('submitToDashboardBtn');
+            const originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+            submitButton.disabled = true;
 
-            fetch('/submit_to_dashboard',{
-                method :'POST',
-                headers:{'Content-Type':'application/json'},
-                body   :JSON.stringify(data)
+            const data = cartItems.map(item => ({
+                nama_makanan: item.nama_makanan,
+                porsi: item.porsi.toString(),
+                protein: item.total_protein.toString(),
+                kalori: item.total_kalori.toString(),
+                waktu_makan: item.waktu_makan,
+                image: item.image || ''
+            }));
+
+            fetch('/submit_to_dashboard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
             })
-            .then(res=>res.json())
-            .then(r=>{
-                if(r.status==='success'){
-                    window.location.href = '/dashboard/{{ user.username }}';
-                }else{ alert('Gagal submit: '+r.message); }
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success') {
+                    // Show success message
+                    submitButton.innerHTML = '<i class="fas fa-check"></i> Berhasil!';
+                    submitButton.style.background = 'linear-gradient(135deg, #43e97b, #38f9d7)';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/dashboard/{{ user.username }}';
+                    }, 1500);
+                } else { 
+                    alert('❌ Gagal mengirim data: ' + result.message); 
+                    submitButton.innerHTML = originalText;
+                    submitButton.disabled = false;
+                }
             })
-            .catch(err=>{
-                console.error(err);
-                alert('Terjadi kesalahan saat mengirim data');
+            .catch(err => {
+                console.error('Error:', err);
+                alert('❌ Terjadi kesalahan saat mengirim data. Silakan coba lagi.');
+                submitButton.innerHTML = originalText;
+                submitButton.disabled = false;
             });
         };
+
+        /* ---------- KEYBOARD SHORTCUTS ---------- */
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                document.getElementById('addToCartBtn').click();
+            }
+            if (e.key === 'Escape') {
+                searchBox.style.display = 'none';
+            }
+        });
+
+        /* ---------- INITIALIZE ---------- */
+        updateCartDisplay();
+        
+        // Set default time based on current hour
+        const currentHour = new Date().getHours();
+        let defaultTime = 'Pagi';
+        if (currentHour >= 11 && currentHour < 15) defaultTime = 'Siang';
+        else if (currentHour >= 15 && currentHour < 19) defaultTime = 'Sore';
+        else if (currentHour >= 19 || currentHour < 6) defaultTime = 'Malam';
+        waktuSelect.value = defaultTime;
+    });
     </script>
 </body>
 </html>
+
+        
