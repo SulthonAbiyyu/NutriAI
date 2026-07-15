@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "nutriai_mobile",
+    "slug": "nutriai_mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.matchaby.nutriai_mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "03f9bdea-aee7-43dc-b36c-7933500c7c71"
+      }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-sharing",
+      "expo-background-task"
+    ]
+  }
+}
