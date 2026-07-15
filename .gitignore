@@ -1,0 +1,52 @@
+# =========================
+# Python
+# =========================
+**/__pycache__/
+**/*.py[cod]
+**/venv/
+**/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+
+# =========================
+# React Native / Expo
+# =========================
+**/node_modules/
+**/.expo/
+**/.expo-shared/
+
+# Android
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+
+# iOS
+**/ios/build/
+**/Pods/
+
+# =========================
+# Environment
+# =========================
+**/.env
+
+# =========================
+# Build
+# =========================
+**/dist/
+**/build/
+coverage/
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
