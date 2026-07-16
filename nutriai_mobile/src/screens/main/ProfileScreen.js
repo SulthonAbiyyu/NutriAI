@@ -1,18 +1,24 @@
-import React, { useState, useCallback } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, RefreshControl,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text, TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation }     from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth }           from '../../context/AuthContext';
-import { getProfile }        from '../../services/ProfileService';
-import { useApi }            from '../../hooks/useApi';
+import BackButtonFloating from '../../components/common/BackButtonFloating';
+import Badge from '../../components/common/Badge';
+import Card from '../../components/common/Card';
+import { useAuth } from '../../context/AuthContext';
+import { useApi } from '../../hooks/useApi';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
-import Card                  from '../../components/common/Card';
-import Badge                 from '../../components/common/Badge';
-import { Colors, Spacing, Radius, Shadow } from '../../theme';
-import { getTujuanConfig, getBmiStatus } from '../../utils';
+import { getProfile } from '../../services/ProfileService';
+import { Colors, Radius, Shadow, Spacing } from '../../theme';
+import { getBmiStatus, getTujuanConfig } from '../../utils';
 
 const LABEL = {
   aktivitas: {
@@ -190,6 +196,14 @@ export default function ProfileScreen() {
         {/* App Version */}
         <Text style={styles.version}>NutriAI v1.0.0</Text>
       </ScrollView>
+
+      {/* ── Tombol Back ke Dashboard (mengambang, pojok kiri bawah,
+          posisi sama kayak di InputMakananScreen & LaporanScreen) ── */}
+      <BackButtonFloating
+        bottom={insets.bottom + 30}
+        left={20}
+        onPress={() => navigation.navigate('Dashboard')}
+      />
     </View>
   );
 }

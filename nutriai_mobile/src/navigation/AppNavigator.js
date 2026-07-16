@@ -1,29 +1,28 @@
-import React from 'react';
-import { createStackNavigator }     from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets }        from 'react-native-safe-area-context';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { Ionicons }                 from '@expo/vector-icons';
-import { LinearGradient }           from 'expo-linear-gradient';
-import { BlurView }                 from 'expo-blur';
+import { createStackNavigator } from '@react-navigation/stack';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth }           from '../context/AuthContext';
-import { Colors }            from '../theme';
+import { useAuth } from '../context/AuthContext';
+import { Colors } from '../theme';
 
-import LoginScreen           from '../screens/auth/LoginScreen';
-import RegisterScreen        from '../screens/auth/RegisterScreen';
-import DashboardScreen       from '../screens/main/DashboardScreen';
-import InputMakananScreen    from '../screens/main/InputMakananScreen';
-import TambahDataScreen      from '../screens/main/TambahDataScreen';
-import LaporanScreen         from '../screens/main/LaporanScreen';
-import ProfileScreen         from '../screens/main/ProfileScreen';
-import WeightTrackerScreen   from '../screens/main/WeightTrackerScreen';
-import WaterTrackerScreen    from '../screens/main/WaterTrackerScreen';
-import AiChatScreen          from '../screens/main/AiChatScreen';
-import EditProfileScreen     from '../screens/main/EditProfileScreen';
-import MealTemplatesScreen   from '../screens/main/MealTemplatesScreen';
-import StreakScreen          from '../screens/main/StreakScreen';
-import BarcodeScannerScreen  from '../screens/main/BarcodeScannerScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
+import RegisterScreen from '../screens/auth/RegisterScreen';
+import AiChatScreen from '../screens/main/AiChatScreen';
+import BarcodeScannerScreen from '../screens/main/BarcodeScannerScreen';
+import DashboardScreen from '../screens/main/DashboardScreen';
+import EditProfileScreen from '../screens/main/EditProfileScreen';
+import InputMakananScreen from '../screens/main/InputMakananScreen';
+import LaporanScreen from '../screens/main/LaporanScreen';
+import MealTemplatesScreen from '../screens/main/MealTemplatesScreen';
+import ProfileScreen from '../screens/main/ProfileScreen';
+import StreakScreen from '../screens/main/StreakScreen';
+import TambahDataScreen from '../screens/main/TambahDataScreen';
+import WaterTrackerScreen from '../screens/main/WaterTrackerScreen';
+import WeightTrackerScreen from '../screens/main/WeightTrackerScreen';
 
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -180,7 +179,7 @@ function MainTabs() {
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
-      tabBar={props => <CustomTabBar {...props} />}
+      tabBar={() => null}
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Dashboard"    component={DashboardScreen}    options={{ title: 'Beranda' }} />

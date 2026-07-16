@@ -1,7 +1,77 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../theme';
+
+// ── PlusIcon3D ───────────────────────────────────────────────────────
+// Ikon "+" itu sendiri yang dibikin timbul/3D (bukan icon tipis di dalam
+// kotak/lingkaran). Triknya: "+" dirender sebagai 2 batang tebal
+// (horizontal + vertical), lalu batang itu ditumpuk beberapa kali —
+// makin jauh ke kanan-bawah, makin gelap/pudar — persis prinsip
+// "faux 3D lettering" yang dipakai Title3D di QuickAccessGrid, cuma di
+// sini bentuknya bar bukan teks. Lapis paling atas dikasih gradient
+// terang→gelap + highlight tipis di tepi atas biar kerasa mengkilap.
+const PLUS_EXTRUDE = [
+  { dx: 4,   dy: 5,   color: 'rgba(20,83,45,0.85)' },  // paling jauh, paling pudar
+  { dx: 2.7, dy: 3.3, color: 'rgba(21,101,54,0.9)' },
+  { dx: 1.4, dy: 1.8, color: 'rgba(22,120,64,0.95)' }, // paling dekat, paling tajam (seam)
+];
+
+// Warna Main FAB — hijau, senada sama identitas app & tombol back.
+const PLUS_TOP_COLORS = ['#4ADE80', '#15803D'];
+const FAB_SIZE = 58;
+
+function PlusBar({ style }) {
+  return (
+    <View style={[styles.plusBarBase, style]}>
+      <LinearGradient
+        colors={PLUS_TOP_COLORS}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* highlight tipis di tepi atas biar kerasa mengkilap/timbul */}
+      <View style={styles.plusBarHighlight} />
+    </View>
+  );
+}
+
+function PlusIcon3D({ size = FAB_SIZE }) {
+  const thickness = Math.round(size * 0.34);
+  const radius    = thickness / 2;
+
+  return (
+    <View style={{ width: size, height: size }}>
+      {PLUS_EXTRUDE.map((l, i) => (
+        <View
+          key={i}
+          pointerEvents="none"
+          style={{ position: 'absolute', top: l.dy, left: l.dx, width: size, height: size }}
+        >
+          <View style={{
+            position: 'absolute', top: (size - thickness) / 2, left: 0,
+            width: size, height: thickness, borderRadius: radius,
+            backgroundColor: l.color,
+          }} />
+          <View style={{
+            position: 'absolute', left: (size - thickness) / 2, top: 0,
+            width: thickness, height: size, borderRadius: radius,
+            backgroundColor: l.color,
+          }} />
+        </View>
+      ))}
+
+      {/* Lapis paling atas — gradient + highlight, ini yang keliatan "hidup" */}
+      <PlusBar style={{
+        top: (size - thickness) / 2, left: 0, width: size, height: thickness, borderRadius: radius,
+      }} />
+      <PlusBar style={{
+        left: (size - thickness) / 2, top: 0, width: thickness, height: size, borderRadius: radius,
+      }} />
+    </View>
+  );
+}
 
 const FAB_ITEMS = [
   {
@@ -37,6 +107,10 @@ const FAB_ITEMS = [
 export default function FabMenu({ bottomOffset = 100, onScan, onAI, onTambahData, onMealTemplates }) {
   const [fabOpen, setFabOpen] = useState(false);
   const fabAnim = useRef(new Animated.Value(0)).current;
+  const pressScale = useRef(new Animated.Value(1)).current;
+
+  const pressIn  = () => Animated.spring(pressScale, { toValue: 0.88, useNativeDriver: true, speed: 40 }).start();
+  const pressOut = () => Animated.spring(pressScale, { toValue: 1,    useNativeDriver: true, speed: 18, bounciness: 9 }).start();
 
   const toggleFab = () => {
     const toVal = fabOpen ? 0 : 1;
@@ -95,16 +169,30 @@ export default function FabMenu({ bottomOffset = 100, onScan, onAI, onTambahData
         );
       })}
 
-      {/* Main FAB */}
-      <View style={[styles.fabWrap, { bottom: bottomOffset }]}>
-        <TouchableOpacity onPress={toggleFab} activeOpacity={0.85} style={styles.fabTouchable}>
-          <BlurView intensity={30} tint="light" style={styles.fabGlass}>
-            <Animated.Text style={[styles.fabIcon, {
-              transform: [{ rotate: fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }],
-            }]}>+</Animated.Text>
-          </BlurView>
+      {/* Main FAB — langsung "+" 3D, tanpa circle box di belakangnya */}
+      <Animated.View
+        style={[
+          styles.fabWrap,
+          {
+            bottom: bottomOffset,
+            transform: [
+              { scale: pressScale },
+              { rotate: fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) },
+            ],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={toggleFab}
+          onPressIn={pressIn}
+          onPressOut={pressOut}
+          activeOpacity={0.85}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={styles.fabTouchable}
+        >
+          <PlusIcon3D size={FAB_SIZE} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </>
   );
 }
@@ -114,21 +202,22 @@ const styles = StyleSheet.create({
 
   fabWrap: {
     position: 'absolute', right: 20, zIndex: 100,
-    width: 58, height: 58, borderRadius: 29,
+    width: FAB_SIZE, height: FAB_SIZE,
+  },
+  fabTouchable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  plusBarBase: {
+    position: 'absolute',
     overflow: 'hidden',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35, shadowRadius: 16, elevation: 12,
-    borderWidth: 1.5, borderColor: 'rgba(34,197,94,0.45)',
-    backgroundColor: Colors.primary,
+    shadowColor: 'rgba(21,101,54,0.5)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1, shadowRadius: 3, elevation: 4,
   },
-  fabTouchable: { flex: 1 },
-  fabGlass: {
-    flex: 1, borderRadius: 29,
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'transparent', overflow: 'hidden',
+  plusBarHighlight: {
+    position: 'absolute', top: 0, left: '12%', right: '12%', height: '35%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  fabIcon: { fontSize: 32, color: '#fff', fontWeight: '200', lineHeight: 36, includeFontPadding: false },
 
   fabItem: { position: 'absolute', right: 20, zIndex: 95, flexDirection: 'row', alignItems: 'center', gap: 10 },
   fabItemLabel: {

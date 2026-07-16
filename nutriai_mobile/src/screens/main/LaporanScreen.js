@@ -3,18 +3,26 @@
  * Style: Clean Futuristic Pastel · Mint-Cyan-Blue-Purple
  */
 
-import React, { useState, useCallback } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, RefreshControl, Image,
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text, TouchableOpacity,
+  View,
 } from 'react-native';
-import { useSafeAreaInsets }   from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Stop, Circle, Text as SvgText } from 'react-native-svg';
-import { getLaporan, buatLaporan, resetAndReport, getWeeklyAnalysis } from '../../services/LaporanService';
-import { useApi }           from '../../hooks/useApi';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+import BackButtonFloating from '../../components/common/BackButtonFloating';
+import LineChart from '../../components/common/LineChart';
+import ProgressBar from '../../components/common/ProgressBar';
+import { useApi } from '../../hooks/useApi';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
-import ProgressBar           from '../../components/common/ProgressBar';
-import LineChart             from '../../components/common/LineChart';
+import { buatLaporan, getLaporan, getWeeklyAnalysis, resetAndReport } from '../../services/LaporanService';
 import { calcProgress, formatDate } from '../../utils';
 
 // ── Design tokens ────────────────────────────────────────────────────────────
@@ -189,6 +197,7 @@ function LaporanItem({ item, target_kalori, target_protein }) {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function LaporanScreen() {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [refreshing,  setRefreshing]  = useState(false);
   const [aiLoading,   setAiLoading]   = useState(false);
@@ -469,6 +478,14 @@ export default function LaporanScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── Tombol Back ke Dashboard (mengambang, pojok kiri bawah,
+          posisi sama kayak di InputMakananScreen) ── */}
+      <BackButtonFloating
+        bottom={insets.bottom + 30}
+        left={20}
+        onPress={() => navigation.navigate('Dashboard')}
+      />
     </View>
   );
 }

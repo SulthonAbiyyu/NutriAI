@@ -5,6 +5,7 @@
  * Screen ref: 430px wide | Samsung A10 = 360dp
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import { readAsStringAsync } from 'expo-file-system/legacy';
@@ -18,16 +19,17 @@ import {
   Easing,
   ImageBackground,
   Modal,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text, TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GoalCard from '../../components/common/GoalCard';
 import GreetCard from '../../components/common/GreetCard';
 import JarvisCard from '../../components/common/JarvisCard';
+import JarvisTextInput from '../../components/common/JarvisTextInput';
+import JarvisVoiceOverlay from '../../components/common/JarvisVoiceOverlay';
 import NutrisiBox from '../../components/common/NutrisiBox';
 import QuickAccessGrid from '../../components/common/QuickAccessGrid';
 import api from '../../config/api';
@@ -41,8 +43,8 @@ import { getDashboard } from '../../services/DashboardService';
 
 // ─── Layout ───────────────────────────────────────────────
 const { width: SW } = Dimensions.get('window');
-const PAD   = 16;
-const GAP   = 10;
+const PAD   = 14;
+const GAP   = 8;
 const AVAIL = SW - PAD * 2 - GAP;
 const L     = Math.floor(AVAIL * 0.535);
 const R     = Math.floor(AVAIL * 0.465);
@@ -67,7 +69,10 @@ const SHD_G      = 'rgba(34,197,94,0.25)';
 // ─── Gradient presets (sudah tidak dipakai — background sekarang pakai BG_IMAGE) ─
 
 // ─── Recording config: paksa M4A/AAC — .3gp tidak didukung Gemini ────────────
+// isMeteringEnabled: true → expo-av ngirim level suara (dBFS) tiap update
+// lewat setOnRecordingStatusUpdate, dipakai buat spectrum di JarvisVoiceOverlay.
 const RECORDING_OPTIONS = {
+  isMeteringEnabled: true,
   android: {
     extension:        '.m4a',
     outputFormat:     2,      // AndroidOutputFormat.MPEG_4
@@ -89,6 +94,20 @@ const RECORDING_OPTIONS = {
   web: { mimeType: 'audio/webm', bitsPerSecond: 128000 },
 };
 const AUDIO_MIME = 'audio/mp4';
+
+// ─── Batas rekaman & timeout proses ──────────────────────────────────
+// MAX_RECORD_MS: auto-stop rekaman kalau user lupa/kelamaan diam — cegah
+// file audio membengkak (upload lama, makin gampang gagal) dan cegah user
+// nyangkut selamanya di mode "recording".
+// PROCESS_TIMEOUT_MS: batas tunggu balasan backend. Kalau kelewat, overlay
+// dikeluarin dari state "processing" dengan pesan error yang jelas, bukan
+// nyangkut selamanya di "Memproses..." tanpa jalan keluar.
+const MAX_RECORD_MS     = 60000; // 60 detik
+const PROCESS_TIMEOUT_MS = 25000; // 25 detik
+// Key AsyncStorage buat nyimpen histori percakapan Jarvis — sebelumnya
+// historyRef cuma hidup di memori, ilang tiap app di-restart/di-kill,
+// padahal Jarvis dijual sebagai asisten yang "inget konteks".
+const JARVIS_HISTORY_KEY = 'jarvis_chat_history_v1';
 
 // ─── Nutrition Card ───────────────────────────────────────
 function NutritionCard({ emoji, label, current, target, unit, barColors, bgColors, pctColor, style }) {
@@ -146,7 +165,7 @@ function NutritionCard({ emoji, label, current, target, unit, barColors, bgColor
 }
 
 // ─── Result Modal — Center Glassmorphism Dialog ──────────
-function ResultModal({ visible, intent, reply, result, onClose, onRefresh, onRevise }) {
+function ResultModal({ visible, intent, reply, result, onClose, onRefresh, onRevise, onAddMissing }) {
   const ICONS = {
     add_food:'🍽', tambah_data:'➕', use_template:'📋', delete_food:'🗑',
     check_today:'📋', check_nutrition:'📊', check_laporan:'📈',
@@ -163,6 +182,10 @@ function ResultModal({ visible, intent, reply, result, onClose, onRefresh, onRev
   };
 
   const needsRefresh = ['add_food','use_template','delete_food','add_water','add_weight'].includes(intent);
+  // Ada makanan yang gak ketemu di database (belum ke-catat sama sekali)
+  // → tawarin jalan pintas buat langsung daftarin, daripada nyuruh user
+  // ngomong ulang lewat "Revisi".
+  const hasNotFound = intent === 'add_food' && (result?.not_found?.length || 0) > 0;
   const intentColor  = INTENT_COLORS[intent] || TXT_S;
 
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
@@ -397,7 +420,11 @@ function ResultModal({ visible, intent, reply, result, onClose, onRefresh, onRev
 
             {/* ── Action buttons ── */}
             <View style={st.resBtnRow}>
-              {needsRefresh && (
+              {hasNotFound ? (
+                <TouchableOpacity style={[st.btnPri, { flex: 1.2 }]} onPress={() => { handleClose(); onAddMissing(result.not_found); }}>
+                  <Text style={st.btnPriTxt}>➕ Tambahkan Datanya</Text>
+                </TouchableOpacity>
+              ) : needsRefresh && (
                 <TouchableOpacity style={[st.btnPri, { flex: 1.2 }]} onPress={() => { onRefresh(); handleClose(); }}>
                   <Text style={st.btnPriTxt}>Lihat Dashboard</Text>
                 </TouchableOpacity>
@@ -417,22 +444,66 @@ function ResultModal({ visible, intent, reply, result, onClose, onRefresh, onRev
   );
 }
 
+// dBFS (kira-kira -60..0) → 0..1 linear, dipakai buat tinggi bar spectrum.
+// -60dB dianggap "diam", 0dB dianggap paling kenceng.
+function meteringToLevel(db) {
+  if (typeof db !== 'number' || !isFinite(db)) return 0;
+  return Math.max(0, Math.min(1, (db + 60) / 60));
+}
+
 // ─── Custom hook: mic recording logic ────────────────────
 function useMicRecorder({ onResult, onRefresh, speak }) {
   const [micStatus, setMicStatus] = useState('idle');
-  const recRef    = useRef(null);
-  const busyRef   = useRef(false);
+  const [micLevel,  setMicLevel]  = useState(0);
+  const recRef     = useRef(null);
+  const busyRef    = useRef(false);
+  const recTimerRef = useRef(null); // id timeout auto-stop (MAX_RECORD_MS)
+  const stopRef     = useRef(null); // selalu nunjuk ke stopAndProcess versi terbaru
+                                     // (dipakai timer di atas, biar gak stale-closure)
+  const abortRef    = useRef(null); // AbortController request yang lagi jalan
+                                     // (dipakai cancelRecording buat batalin
+                                     // request pas fase "processing")
   // Conversation history: array of {role:'user'|'assistant', text:string}
   const historyRef = useRef([]);
 
+  // Simpen histori ke disk tiap kali berubah — best-effort, gak nge-block
+  // apapun kalau gagal (misal storage penuh), cuma di-log.
+  const persistHistory = useCallback(() => {
+    AsyncStorage.setItem(JARVIS_HISTORY_KEY, JSON.stringify(historyRef.current)).catch((e) => {
+      console.warn('[Mic] Gagal simpan history:', e);
+    });
+  }, []);
+
+  // Hidupin lagi histori dari sesi sebelumnya pas hook pertama kali mount
+  // (misal app baru dibuka lagi) — supaya Jarvis beneran "inget" percakapan
+  // sebelumnya, bukan cuma sepanjang 1 sesi app kebuka.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(JARVIS_HISTORY_KEY);
+        if (raw) historyRef.current = JSON.parse(raw);
+      } catch (e) {
+        console.warn('[Mic] Gagal load history:', e);
+      }
+    })();
+  }, []);
+
+  const clearRecordTimer = useCallback(() => {
+    if (recTimerRef.current) {
+      clearTimeout(recTimerRef.current);
+      recTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
+      clearRecordTimer();
       if (recRef.current) {
         recRef.current.stopAndUnloadAsync().catch(() => {});
         recRef.current = null;
       }
     };
-  }, []);
+  }, [clearRecordTimer]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -446,8 +517,24 @@ function useMicRecorder({ onResult, onRefresh, speak }) {
         playsInSilentModeIOS: true,
       });
       const { recording } = await Audio.Recording.createAsync(RECORDING_OPTIONS);
+      // Update level tiap 100ms — cukup responsif buat spectrum tanpa bikin
+      // terlalu banyak re-render.
+      recording.setProgressUpdateInterval(100);
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (status.isRecording) setMicLevel(meteringToLevel(status.metering));
+      });
       recRef.current = recording;
+      setMicLevel(0);
       setMicStatus('recording');
+
+      // Auto-stop kalau kelamaan (lupa nge-tap Stop, atau lingkungan
+      // hening jadi durasi ngambang terus) — cegah file audio membengkak
+      // & cegah user nyangkut selamanya di mode "recording".
+      clearRecordTimer();
+      recTimerRef.current = setTimeout(() => {
+        if (recRef.current) stopRef.current?.();
+      }, MAX_RECORD_MS);
+
       return true;
     } catch (e) {
       console.warn('[Mic] startRecording error:', e);
@@ -458,11 +545,87 @@ function useMicRecorder({ onResult, onRefresh, speak }) {
     }
   }, []);
 
+  // Kirim payload (audio ATAU text) ke backend, proses hasilnya, urus history.
+  // Dipisah dari stopAndProcess supaya bisa dipakai ulang oleh sendText()
+  // (misal dari tombol "➕ Tambahkan Datanya"), gak cuma dari rekaman suara.
+  //
+  // Dibungkus Promise.race dengan timeout (PROCESS_TIMEOUT_MS): kalau koneksi
+  // jelek/backend lambat, UI TIDAK BOLEH nyangkut di "Memproses..." tanpa
+  // batas — user harus selalu punya jalan keluar.
+  //
+  // abortRef nyimpen AbortController request yang lagi jalan, dipakai
+  // cancelRecording() supaya tombol "✕ Batal" TETAP hidup walau audio sudah
+  // terkirim (fase processing) — sebelumnya begitu Stop dipencet, user
+  // kejebak nunggu tanpa jalan keluar sampai backend selesai/gagal sendiri.
+  // CATATAN: butuh `api` (config/api.js) berupa instance axios yang nerusin
+  // config.signal ke request asli — kalau instance-nya custom/bukan axios,
+  // signal ini mungkin diabaikan begitu aja (aman, gak nge-crash, cuma
+  // abort-nya jadi gak beneran motong request-nya).
+  const processCommand = useCallback(async (payload) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const timeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), PROCESS_TIMEOUT_MS);
+      });
+      const res = await Promise.race([
+        api.post('/api/ai/voice-command', {
+          ...payload,
+          history: historyRef.current.slice(-8), // kirim max 8 pesan terakhir
+        }, { signal: controller.signal }),
+        timeout,
+      ]);
+
+      const { intent, reply, tts_text, action_result } = res.data;
+
+      // Simpan ke history lokal.
+      // FIX: sebelumnya cuma balasan assistant yang disimpan — giliran user
+      // gak pernah tercatat sama sekali (termasuk pas ngomong via suara,
+      // transkripnya emang gak balik ke client). Kalau payload berupa teks
+      // (dari sendText), sekarang ikut dicatat juga, supaya Gemini beneran
+      // "inget" apa yang diminta user, bukan cuma nebak dari balasannya sendiri.
+      if (payload.text) historyRef.current.push({ role: 'user', text: payload.text });
+      historyRef.current.push({ role: 'assistant', text: reply });
+      // Batasi max 16 item agar tidak membengkak
+      if (historyRef.current.length > 16) historyRef.current = historyRef.current.slice(-16);
+      persistHistory();
+
+      if (tts_text || reply) speak(tts_text || reply);
+      onResult({ intent, reply, result: action_result });
+
+      if (['add_food','use_template','delete_food','add_water','add_weight'].includes(intent)) {
+        await onRefresh();
+      }
+    } catch (e) {
+      // Dibatalkan user sendiri (tombol ✕ Batal pas processing) — bukan
+      // error, jangan tampilkan pesan apapun. cancelRecording() yang sudah
+      // ngurus balikin UI ke idle.
+      const isAborted = controller.signal.aborted
+        || e?.name === 'CanceledError'
+        || e?.code === 'ERR_CANCELED'
+        || e?.message === 'canceled';
+      if (isAborted) {
+        console.log('[Mic] Permintaan dibatalkan user.');
+        return;
+      }
+      console.warn('[Mic] processCommand error:', e);
+      const isTimeout = e?.message === 'TIMEOUT';
+      const errMsg = isTimeout
+        ? 'Waktu tunggu habis. Cek koneksi internet kamu, lalu coba lagi.'
+        : (e?.response?.data?.error ?? 'Gagal memproses, coba lagi.');
+      onResult({ intent: 'general', reply: errMsg, result: null });
+    } finally {
+      abortRef.current = null;
+    }
+  }, [onResult, onRefresh, speak, persistHistory]);
+
   const stopAndProcess = useCallback(async () => {
+    clearRecordTimer();
     const recording = recRef.current;
     if (!recording) { busyRef.current = false; return; }
 
     setMicStatus('processing');
+    setMicLevel(0);
     recRef.current = null;
 
     try {
@@ -473,26 +636,7 @@ function useMicRecorder({ onResult, onRefresh, speak }) {
       if (!uri) throw new Error('URI rekaman tidak ditemukan.');
 
       const b64 = await readAsStringAsync(uri, { encoding: 'base64' });
-
-      const res = await api.post('/api/ai/voice-command', {
-        audio_base64: b64,
-        mime_type:    AUDIO_MIME,
-        history:      historyRef.current.slice(-8), // kirim max 8 pesan terakhir
-      });
-
-      const { intent, reply, tts_text, action_result, history_entry } = res.data;
-
-      // Simpan ke history lokal
-      historyRef.current.push({ role: 'assistant', text: reply });
-      // Batasi max 16 item agar tidak membengkak
-      if (historyRef.current.length > 16) historyRef.current = historyRef.current.slice(-16);
-
-      if (tts_text || reply) speak(tts_text || reply);
-      onResult({ intent, reply, result: action_result });
-
-      if (['add_food','use_template','delete_food','add_water','add_weight'].includes(intent)) {
-        await onRefresh();
-      }
+      await processCommand({ audio_base64: b64, mime_type: AUDIO_MIME });
     } catch (e) {
       console.warn('[Mic] stopAndProcess error:', e);
       Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
@@ -502,7 +646,50 @@ function useMicRecorder({ onResult, onRefresh, speak }) {
       setMicStatus('idle');
       busyRef.current = false;
     }
-  }, [onResult, onRefresh, speak]);
+  }, [processCommand, onResult]);
+
+  // stopRef selalu nunjuk ke versi stopAndProcess yang paling baru — dipakai
+  // sama timer auto-stop di startRecording, supaya gak ada resiko manggil
+  // closure yang basi (stale) walau processCommand/onResult berubah referensi.
+  useEffect(() => { stopRef.current = stopAndProcess; }, [stopAndProcess]);
+
+  // Batalkan: kalau masih "recording" → stop & buang audio (gak dikirim).
+  // Kalau sudah "processing" (audio udah terkirim) → abort request yang lagi
+  // jalan via AbortController, biar user gak kejebak nunggu tanpa jalan
+  // keluar. Dipakai tombol "✕ Batal" di JarvisVoiceOverlay, aktif di KEDUA
+  // fase itu sekarang (sebelumnya cuma aktif pas recording).
+  const cancelRecording = useCallback(async () => {
+    clearRecordTimer();
+
+    // Fase processing: batalin request-nya, bukan urusin objek recording
+    // (recRef.current sudah null di fase ini, lihat stopAndProcess).
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setMicStatus('idle');
+      busyRef.current = false;
+      return;
+    }
+
+    const recording = recRef.current;
+    recRef.current = null;
+    setMicLevel(0);
+
+    if (!recording) {
+      busyRef.current = false;
+      setMicStatus('idle');
+      return;
+    }
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    } catch (e) {
+      console.warn('[Mic] cancelRecording error:', e);
+    } finally {
+      setMicStatus('idle');
+      busyRef.current = false;
+    }
+  }, []);
 
   const handleTalk = useCallback(async () => {
     if (busyRef.current || micStatus === 'processing') return;
@@ -520,10 +707,31 @@ function useMicRecorder({ onResult, onRefresh, speak }) {
     }
   }, [micStatus, startRecording, stopAndProcess]);
 
-  // Expose clearHistory untuk reset konteks jika diperlukan
-  const clearHistory = useCallback(() => { historyRef.current = []; }, []);
+  // Kirim perintah TEKS langsung (tanpa rekam suara) — dipakai tombol
+  // "➕ Tambahkan Datanya" di ResultModal. Lebih presisi & deterministik
+  // daripada nyuruh user ngomong ulang lewat "🎙 Revisi", karena teksnya
+  // udah pasti (dibangun dari action_result.not_found), gak bergantung
+  // sama Gemini "nebak" konteks dari history yang cuma sepihak.
+  const sendText = useCallback(async (text) => {
+    if (busyRef.current || micStatus === 'processing') return;
+    busyRef.current = true;
+    setMicStatus('processing');
+    try {
+      await processCommand({ text });
+    } finally {
+      setMicStatus('idle');
+      busyRef.current = false;
+    }
+  }, [processCommand, micStatus]);
 
-  return { micStatus, handleTalk, clearHistory };
+  // Expose clearHistory untuk reset konteks jika diperlukan — sekarang ikut
+  // hapus salinan yang tersimpan di disk (AsyncStorage), bukan cuma di memori.
+  const clearHistory = useCallback(() => {
+    historyRef.current = [];
+    AsyncStorage.removeItem(JARVIS_HISTORY_KEY).catch(() => {});
+  }, []);
+
+  return { micStatus, micLevel, handleTalk, cancelRecording, clearHistory, sendText };
 }
 
 // ─── Main Screen ──────────────────────────────────────────
@@ -534,13 +742,39 @@ export default function DashboardScreen() {
   const { data, loading, execute }  = useApi(getDashboard);
   const { userId }  = useAuth();
   const { isOnline, syncing, pendingCount } = useSyncManager(userId);
-  const { speak }   = useTTS();
+  // isSpeaking: dipakai buat misahin ikon "lagi ngomong balik" (speaker) dari
+  // "lagi rekam" (mic) di tile Jarvis — sebelumnya keduanya sama-sama pakai
+  // ikon speaker, padahal secara konvensi UI speaker = output bukan input,
+  // jadi membingungkan pas dipakai buat nandain rekaman.
+  // Default false kalau useTTS() versi kamu belum expose properti ini —
+  // JarvisTile otomatis fallback ke ikon mic terus, jadi tetap aman jalan.
+  const { speak, isSpeaking = false } = useTTS();
 
   const [resVis,  setResVis]  = useState(false);
   const [resData, setResData] = useState({ intent: 'general', reply: '', result: null });
 
   // ── Tambah Data flow: simpan data nutrisi dari AI, tampilkan form konfirmasi ──
   const [pendingFood, setPendingFood] = useState(null);
+
+  // Posisi tile Jarvis di layar (measureInWindow), di-update tiap kali
+  // tile di-tap — dipakai buat naruh JarvisVoiceOverlay mengambang tepat
+  // di atas box-nya, bukan sebagai bottom-sheet lagi.
+  const [jarvisAnchor, setJarvisAnchor] = useState(null);
+
+  // Fallback "ketik perintah" — dibuka dari badge ⌨ di pojok tile Jarvis.
+  // Reuse anchor yang sama kayak JarvisVoiceOverlay biar posisinya konsisten.
+  const [textInputVisible, setTextInputVisible] = useState(false);
+
+  // ── Fit-1-halaman: semua konten scroll (kecuali GreetCard yang floating)
+  // dikecilkan proporsional pakai transform scale, lalu tinggi aslinya
+  // diukur via onLayout supaya sisa ruang kosong di bawah (akibat scale)
+  // dipangkas pakai marginBottom negatif — jadi tidak ada celah putih
+  // dan tidak ada layout internal komponen yang berantakan.
+  const [scaledContentH, setScaledContentH] = useState(0);
+  // Satu nilai scale yang sama buat X & Y — biar proporsi tetap pas,
+  // tidak lonjong/gepeng. transformOrigin 'top' bikin penyusutan terjadi
+  // dari atas, jadi konten ikut naik, bukan cuma menyusut di tengah.
+  const CONTENT_SCALE = 0.90;
 
   const fadeIn  = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(22)).current;
@@ -623,11 +857,20 @@ export default function DashboardScreen() {
 
   const handleCancelFood = useCallback(() => setPendingFood(null), []);
 
-  const { micStatus, handleTalk } = useMicRecorder({
+  const { micStatus, micLevel, handleTalk, cancelRecording, sendText } = useMicRecorder({
     onResult:  handleResult,
     onRefresh,
     speak,
   });
+
+  // Tombol "➕ Tambahkan Datanya" di ResultModal — bangun command teks
+  // pasti dari daftar not_found (misal ["cireng"] → "tambah data cireng
+  // ke database"), kirim langsung tanpa perlu user ngomong ulang.
+  const handleAddMissing = useCallback((notFoundList = []) => {
+    if (!notFoundList.length) return;
+    const nama = notFoundList[0]; // ambil satu dulu; kalau ada beberapa, sisanya bisa diulang manual
+    sendText(`tambah data ${nama} ke database`);
+  }, [sendText]);
 
   // Isi ref setelah handleTalk tersedia
   handleTalkRef.current = handleTalk;
@@ -684,63 +927,81 @@ export default function DashboardScreen() {
         </View>
       )}
 
+      {/* ═══ GreetCard — floating, pojok kanan atas, di luar flow scroll ════ */}
+      <View style={[st.floatingGreet, { top: 62 }]} pointerEvents="box-none">
+        <GreetCard username={user.username} compact />
+      </View>
+
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={st.scroll}
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={[st.scroll, { paddingBottom: insets.bottom + 8 }]}
         style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GREEN} />
-        }
       >
-        {/* ═══ ROW 1 — Greeting (kecil, paling atas) ════ */}
-        <View style={{ marginBottom: 10 }}>
-          <GreetCard username={user.username} compact />
-        </View>
+        {/* ═══ Wrapper scale: mengecilkan SEMUA konten di bawah GreetCard
+            secara proporsional (bukan ubah style tiap komponen satu-satu,
+            supaya layout internal GoalCard/JarvisCard/NutrisiBox/
+            QuickAccessGrid — yang file-nya tidak ada di sini — tidak
+            ikut ke-edit dan berisiko berantakan). Tinggi asli diukur via
+            onLayout, lalu ruang kosong sisa scale dipangkas dengan
+            marginBottom negatif supaya tidak ada celah kosong di bawah. ═══ */}
+        <View
+          onLayout={(e) => setScaledContentH(e.nativeEvent.layout.height)}
+          style={{
+            transform: [{ scale: CONTENT_SCALE }],
+            transformOrigin: 'top',
+            marginBottom: scaledContentH ? -(scaledContentH * (1 - CONTENT_SCALE)) : 0,
+          }}
+        >
+          {/* ═══ ROW 1b — Goal Card (full width) ════ */}
+          <GoalCard
+            tujuan={user.tujuan ?? 'bulking'}
+            bbSekarang={user.bb ?? 0}
+            bbTarget={user.target_bb ?? (user.bb ?? 0) + 5}
+            bbAwal={user.bb_awal ?? (user.bb ?? 0) - 2}
+            mingguKe={mingguKe}
+            style={{ marginBottom: 8 }}
+          />
 
-        {/* ═══ ROW 1b — Goal Card (full width) ════ */}
-        <GoalCard
-          tujuan={user.tujuan ?? 'bulking'}
-          bbSekarang={user.bb ?? 0}
-          bbTarget={user.target_bb ?? (user.bb ?? 0) + 5}
-          bbAwal={user.bb_awal ?? (user.bb ?? 0) - 2}
-          mingguKe={mingguKe}
-          style={{ marginBottom: 10 }}
-        />
+          {/* ═══ ROW 2 — Jarvis: form konfirmasi tambah data (hanya muncul saat pendingFood) ════ */}
+          {pendingFood && (
+            <View style={[st.row, { marginBottom: 8 }]}>
+              <JarvisCard
+                onTalk={handleTalk}
+                micStatus={micStatus}
+                pendingFood={pendingFood}
+                onConfirmFood={handleConfirmFood}
+                onCancelFood={handleCancelFood}
+              />
+            </View>
+          )}
 
-        {/* ═══ ROW 2 — Jarvis: form konfirmasi tambah data (hanya muncul saat pendingFood) ════ */}
-        {pendingFood && (
-          <View style={[st.row, { marginBottom: 10 }]}>
-            <JarvisCard
-              onTalk={handleTalk}
+          {/* ═══ ROW 3 — Nutrisi Box: Kalori, Karbo, Protein, Lemak (1 box) ════ */}
+          <NutrisiBox
+            kaloriCurrent={total_kalori}   kaloriTarget={target_kalori}
+            karboCurrent={total_karbo}     karboTarget={target_karbo}
+            proteinCurrent={total_protein} proteinTarget={target_protein}
+            lemakCurrent={total_lemak}     lemakTarget={target_lemak}
+            style={{ marginBottom: 8 }}
+          />
+
+          {/* ═══ ROW 4 — Quick Access Grid: 6 box (Input Makanan, Tambah Data, Laporan, Profile, Jarvis, Chat NutriAI) ════ */}
+          <View style={{ marginTop: 14 }}>
+            <QuickAccessGrid
+              onInputMakanan={() => navigation.navigate(ROUTES.INPUT_MAKAN)}
+              onTambahData={  () => navigation.navigate('TambahData')}
+              onLaporan={     () => navigation.navigate(ROUTES.LAPORAN)}
+              onProfile={     () => navigation.navigate(ROUTES.PROFIL)}
+              onJarvis={(rect) => { setJarvisAnchor(rect); handleTalk(); }}
+              onJarvisType={(rect) => { setJarvisAnchor(rect); setTextInputVisible(true); }}
+              onChatAI={     () => navigation.navigate('AiChat')}
               micStatus={micStatus}
-              pendingFood={pendingFood}
-              onConfirmFood={handleConfirmFood}
-              onCancelFood={handleCancelFood}
+              isSpeaking={isSpeaking}
             />
           </View>
-        )}
-
-        {/* ═══ ROW 3 — Nutrisi Box: Kalori, Karbo, Protein, Lemak (1 box) ════ */}
-        <NutrisiBox
-          kaloriCurrent={total_kalori}   kaloriTarget={target_kalori}
-          karboCurrent={total_karbo}     karboTarget={target_karbo}
-          proteinCurrent={total_protein} proteinTarget={target_protein}
-          lemakCurrent={total_lemak}     lemakTarget={target_lemak}
-          style={{ marginBottom: 10 }}
-        />
-
-        {/* ═══ ROW 4 — Quick Access Grid: 6 box (Input Makanan, Tambah Data, Laporan, Profile, Jarvis, Chat NutriAI) ════ */}
-        <QuickAccessGrid
-          onInputMakanan={() => navigation.navigate(ROUTES.INPUT_MAKAN)}
-          onTambahData={  () => navigation.navigate('TambahData')}
-          onLaporan={     () => navigation.navigate(ROUTES.LAPORAN)}
-          onProfile={     () => navigation.navigate(ROUTES.PROFIL)}
-          onJarvis={handleTalk}
-          onChatAI={     () => navigation.navigate('AiChat')}
-          micStatus={micStatus}
-        />
-
-        <View style={{ height: 20 }} />
+        </View>
       </Animated.ScrollView>
 
       <ResultModal
@@ -751,6 +1012,31 @@ export default function DashboardScreen() {
         onClose={() => setResVis(false)}
         onRefresh={onRefresh}
         onRevise={handleRevise}
+        onAddMissing={handleAddMissing}
+      />
+
+      {/* ═══ Jarvis "mode on" — popover kecil mengambang di atas box Jarvis,
+          spectrum suara real-time + Stop/Batal. Terpisah dari grid/card,
+          jadi layout QuickAccessGrid & JarvisCard tidak pernah kesenggol. */}
+      <JarvisVoiceOverlay
+        visible={micStatus === 'recording' || micStatus === 'processing'}
+        status={micStatus}
+        level={micLevel}
+        anchor={jarvisAnchor}
+        onStop={handleTalk}
+        onCancel={cancelRecording}
+      />
+
+      {/* ═══ Fallback "ketik perintah" — buat situasi gak nyaman/gak bisa
+          ngomong ke mic (tempat berisik, mic error, dll). Reuse sendText()
+          yang sama dipakai tombol "➕ Tambahkan Datanya" di ResultModal,
+          jadi behavior backend-nya sudah teruji, bukan jalur baru. ═══ */}
+      <JarvisTextInput
+        visible={textInputVisible}
+        anchor={jarvisAnchor}
+        sending={micStatus === 'processing'}
+        onSend={(text) => { setTextInputVisible(false); sendText(text); }}
+        onClose={() => setTextInputVisible(false)}
       />
     </ImageBackground>
   );
@@ -761,9 +1047,15 @@ const st = StyleSheet.create({
 
   root:   { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { paddingHorizontal: PAD, paddingTop: 10, paddingBottom: 24 },
+  scroll: { paddingHorizontal: PAD, paddingTop: 118, paddingBottom: 12 },
   row:    { flexDirection: 'row', gap: GAP },
   syncBanner: { paddingHorizontal: 14, paddingVertical: 7 },
+  floatingGreet: {
+    position: 'absolute',
+    right: PAD + 20,
+    zIndex: 20,
+    elevation: 20,
+  },
 
   ringCard: {
     backgroundColor: 'rgba(255,255,255,0.88)',

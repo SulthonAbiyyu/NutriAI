@@ -8,19 +8,31 @@
  * - Modal edit lengkap dengan ganti foto
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, Image, ActivityIndicator, RefreshControl,
-  Alert, Animated, Modal, ScrollView,
-  KeyboardAvoidingView, Platform,
+  ActivityIndicator,
+  Alert, Animated,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation }     from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker      from 'expo-image-picker';
-import { getFoods, addFood, updateFood, deleteFood } from '../../services/FoodService';
-import Input  from '../../components/common/Input';
-import { Colors, Spacing, Radius } from '../../theme';
+import BackButtonFloating from '../../components/common/BackButtonFloating';
+import FabMenu from '../../components/common/FabMenu';
+import Input from '../../components/common/Input';
+import { addFood, deleteFood, getFoods, updateFood } from '../../services/FoodService';
+import { Colors, Spacing } from '../../theme';
 
 // ── Neumorphism ───────────────────────────────────────────────────────────────
 const NM_BASE = '#ECF0F3';
@@ -366,6 +378,20 @@ export default function TambahDataScreen() {
   const navigation = useNavigation();
   const insets     = useSafeAreaInsets();
 
+  // goBack() error kalau screen ini kebetulan gak punya history sebelumnya
+  // (mis. reload app pas lagi di sini). Kalau itu terjadi, fallback manual
+  // ke tab Dashboard lewat nested navigation ('Main' -> screen 'Dashboard'),
+  // bukan navigate('Dashboard') langsung (itu yang bikin error sebelumnya,
+  // karena 'Dashboard' cuma dikenal di dalam Tab Navigator, bukan di stack
+  // tempat TambahDataScreen ini berada).
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Main', { screen: 'Dashboard' });
+    }
+  };
+
   const [foods,       setFoods]       = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
@@ -444,20 +470,16 @@ export default function TambahDataScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Database Makanan</Text>
-          {!loading && <Text style={styles.headerSub}>{totalCount} item di database</Text>}
+          <Image source={require('../../../assets/database.png')} style={styles.headerIcon} resizeMode="contain" />
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>Database Makanan</Text>
+            {!loading && <Text style={styles.headerSub}>{totalCount} item di database</Text>}
+          </View>
         </View>
-        <TouchableOpacity
-          style={[styles.addBtn, nm(4)]}
-          onPress={() => setFormModal({ visible: true, mode: 'tambah', data: null })}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.addBtnText}>+</Text>
-        </TouchableOpacity>
       </View>
 
       {/* ── Search ── */}
@@ -529,6 +551,22 @@ export default function TambahDataScreen() {
         />
       )}
 
+      {/* ── Tombol Back ke Dashboard (mengambang, pojok kiri bawah) ── */}
+      <BackButtonFloating
+        bottom={insets.bottom + 30}
+        left={20}
+        onPress={handleBack}
+      />
+
+      {/* ── FAB Tambah (mengambang, pojok kanan bawah — komponen sama
+          persis dengan Input Makanan). Sub-item "Tambah Data" dipasangkan
+          ke form tambah makanan di halaman ini sendiri (bukan navigasi
+          keluar, karena kita memang sudah ada di halaman database). ── */}
+      <FabMenu
+        bottomOffset={insets.bottom + 30}
+        onTambahData={() => setFormModal({ visible: true, mode: 'tambah', data: null })}
+      />
+
       {/* ── Form Modal ── */}
       <FormModal
         visible={formModal.visible}
@@ -554,15 +592,11 @@ const styles = StyleSheet.create({
   },
   backBtn:      { width: 36, height: 36, justifyContent: 'center' },
   backArrow:    { fontSize: 22, color: Colors.text || '#2D3A4A' },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle:  { fontSize: 16, fontWeight: '800', color: Colors.text || '#2D3A4A' },
-  headerSub:    { fontSize: 11, color: Colors.textMuted || '#9AAABB', marginTop: 2 },
-  addBtn: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: Colors.primary || '#5A8DF5',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  addBtnText: { fontSize: 22, color: '#fff', fontWeight: '300', lineHeight: 26, includeFontPadding: false },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerIcon:   { width: 30, height: 30 },
+  headerTextWrap: { flex: 1, alignItems: 'flex-start' },
+  headerTitle:  { fontSize: 16, fontWeight: '800', color: Colors.text || '#2D3A4A', textAlign: 'left' },
+  headerSub:    { fontSize: 11, color: Colors.textMuted || '#9AAABB', marginTop: 2, textAlign: 'left' },
 
   searchWrap: { paddingHorizontal: Spacing.md || 16, paddingVertical: 12 },
   searchBox: {

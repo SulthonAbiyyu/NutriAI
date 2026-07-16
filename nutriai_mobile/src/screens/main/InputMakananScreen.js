@@ -10,26 +10,29 @@
  * - Progress kalori & protein realtime
  */
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
-} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView, Platform,
+  ScrollView,
+  StyleSheet,
+  Text, TouchableOpacity,
+  View
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDaily, submitDaily } from '../../services/DailyService';
-import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
-import { useApi }            from '../../hooks/useApi';
-import { Colors, Spacing, Radius } from '../../theme';
 import { ROUTES } from '../../constants';
+import { useApi } from '../../hooks/useApi';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { getDaily, submitDaily } from '../../services/DailyService';
+import { Colors, Radius, Spacing } from '../../theme';
 
-import MealCard        from '../../components/common/MealCard';
-import RecentFoods     from '../../components/common/RecentFoods';
-import CartSection     from '../../components/common/CartSection';
-import FabMenu         from '../../components/common/FabMenu';
-import AiAnalyzeModal  from '../../components/common/AiAnalyzeModal';
-import AddFoodModal    from '../../components/common/AddFoodModal';
+import AddFoodModal from '../../components/common/AddFoodModal';
+import AiAnalyzeModal from '../../components/common/AiAnalyzeModal';
+import BackButtonFloating from '../../components/common/BackButtonFloating';
+import CartSection from '../../components/common/CartSection';
+import FabMenu from '../../components/common/FabMenu';
+import MealCard from '../../components/common/MealCard';
 
 const WAKTU_OPTS = ['Pagi', 'Siang', 'Sore', 'Malam'];
 const BULAN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
@@ -48,19 +51,6 @@ export default function InputMakananScreen() {
 
   const { data: dailyData, execute: refreshDaily } = useApi(getDaily);
   useRefreshOnFocus(refreshDaily);
-
-  // ── Recent foods: deduplicated, max 10, sorted by last used ──
-  const recentFoods = useMemo(() => {
-    const all = dailyData?.recent_foods || [];
-    const seen = new Set();
-    return all
-      .filter(f => {
-        if (seen.has(f.id)) return false;
-        seen.add(f.id);
-        return true;
-      })
-      .slice(0, 10);
-  }, [dailyData?.recent_foods]);
 
   // ── Cart ─────────────────────────────────────────────
   const addToCart = (food) => {
@@ -148,13 +138,6 @@ export default function InputMakananScreen() {
             />
           ))}
 
-          {/* ── Terakhir Ditambahkan ── */}
-          <RecentFoods
-            recentFoods={recentFoods}
-            onAddToCart={addToCart}
-            emptyMessage="Belum ada makanan yang pernah ditambahkan. Mulai dengan scan atau AI! 🥗"
-          />
-
           {/* ── Cart ── */}
           <CartSection
             cart={cart}
@@ -170,10 +153,18 @@ export default function InputMakananScreen() {
 
       {/* ── FAB ── */}
       <FabMenu
-        bottomOffset={insets.bottom + 100}
+        bottomOffset={insets.bottom + 30}
         onScan={() => navigation.navigate(ROUTES.BARCODE_SCANNER)}
         onAI={() => setShowAI(true)}
         onTambahData={() => navigation.navigate('TambahData')}
+      />
+
+      {/* ── Tombol Back ke Dashboard (mengambang, pojok kiri bawah,
+          karena tab bar disembunyikan di halaman ini) ── */}
+      <BackButtonFloating
+        bottom={insets.bottom + 30}
+        left={20}
+        onPress={() => navigation.navigate('Dashboard')}
       />
 
       {/* ── AI Modal ── */}

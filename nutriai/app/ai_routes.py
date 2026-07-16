@@ -50,7 +50,23 @@ def call_gemini(prompt: str, image_base64: str = None) -> dict:
 
     payload = json.dumps({
         'contents': [{'parts': parts}],
-        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 1024},
+        # FIX: model gemini-2.5-flash (termasuk varian -preview) punya "thinking"
+        # (internal reasoning) yang NYALA SECARA DEFAULT, dan token buat mikir itu
+        # ikut dipotong dari maxOutputTokens — bukan budget terpisah. Dengan
+        # maxOutputTokens cuma 1024, proses mikirnya bisa makan hampir semua
+        # budget, jadi jawaban yang beneran ditulis kepotong di tengah kalimat
+        # (mis. "sisa target ... kcal" putus, atau list "5 rekomendasi" cuma
+        # kebagian 1). thinkingBudget: 0 matiin proses mikir itu (gak perlu buat
+        # chat nutrisi/saran menu yang sifatnya singkat & langsung), dan
+        # maxOutputTokens dinaikkan sebagai jaga-jaga.
+        # CATATAN: thinkingBudget: 0 cuma didukung model Flash. Kalau GEMINI_MODEL
+        # di .env diganti ke model Pro, ganti nilainya ke minimal 128 (Pro selalu
+        # butuh sedikit "thinking", gak bisa 0).
+        'generationConfig': {
+            'temperature':      0.7,
+            'maxOutputTokens':  2048,
+            'thinkingConfig':   {'thinkingBudget': 0},
+        },
     }).encode()
 
     RETRY_DELAYS = [2, 5, 10]
@@ -192,8 +208,7 @@ def ai_debug():
 def ai_meal_suggestion():
     """Saran menu berdasarkan sisa kalori & protein hari ini."""
     user  = get_current_user()
-    today = now_utc().date()
-
+    today = (now_utc() + timedelta(hours=7)).date()  # FIX: pakai tanggal WIB, bukan UTC
     entries = WaktuMakan.query.filter(
         WaktuMakan.user_id    == user.id,
         WaktuMakan.tanggal    == today,
@@ -212,7 +227,10 @@ def ai_meal_suggestion():
         f"Hari ini sudah makan {total_kalori} kcal ({total_protein}g protein). "
         f"Sisa target: {sisa_kal} kcal dan {sisa_prot}g protein. "
         f"Berikan 3 saran menu makanan Indonesia yang mudah didapat untuk memenuhi sisa target. "
-        f"Format singkat dan praktis dalam Bahasa Indonesia."
+        f"Format singkat dan praktis dalam Bahasa Indonesia. "
+        f"JANGAN pakai markdown (tanpa tanda bintang **, tanpa #, tanpa garis bawah _) karena teks "
+        f"ditampilkan apa adanya di app. Format list bernomor PERSIS begini: "
+        f"'1. nama_menu = penjelasan singkat', '2. nama_menu = penjelasan singkat', dst."
     )
 
     try:
@@ -278,7 +296,7 @@ def ai_chat():
     if not msg:
         return jsonify({'error': 'Pesan tidak boleh kosong'}), 400
 
-    today = now_utc().date()
+    today = (now_utc() + timedelta(hours=7)).date()  # FIX: pakai tanggal WIB, bukan UTC
     target_cal, target_prot = get_targets(user)
 
     # Status hari ini untuk konteks
@@ -295,14 +313,32 @@ def ai_chat():
         f"Kamu adalah NutriAI, asisten nutrisi personal yang cerdas, hangat, dan peka konteks. "
         f"Berbicara seperti teman yang peduli — tidak kaku, tetapi tetap akurat dan informatif. "
         f"SELALU jawab dalam Bahasa Indonesia yang natural. Gunakan nama user sesekali.\n\n"
+        f"GAYA JAWABAN (PENTING):\n"
+        f"- Langsung ke inti jawaban. Buang basa-basi dan jangan ulang-ulang info yang gak ditanya user.\n"
+        f"- Jangan otomatis nyebut status hari ini (kalori/protein sudah makan berapa) kecuali memang relevan "
+        f"sama pertanyaan atau user memang nanya soal progress/statusnya.\n"
+        f"- Kalau user tanya penilaian (worth it/gak, sehat/gak, boleh/gak, cukup/gak), pakai pola singkat: "
+        f"kesimpulan (ya/tidak/tergantung) → alasan singkat 1-2 kalimat → saran singkat 1 kalimat kalau perlu. "
+        f"Total idealnya 2-4 kalimat.\n"
+        f"- Kalau user minta list/detail panjang (misal 'kasih beberapa saran', 'jelaskan lengkap'), baru boleh lebih panjang.\n"
+        f"- JANGAN pakai markdown sama sekali — tanpa tanda bintang ** (bold), tanpa #, tanpa garis bawah _. "
+        f"Teks ditampilkan apa adanya di app (bukan di-render sebagai markdown), jadi tanda-tanda itu bakal "
+        f"kelihatan literal sebagai karakter, bukan jadi format tebal.\n"
+        f"- Kalau bikin list bernomor, formatnya PERSIS begini: '1. nama_item = penjelasan singkat', "
+        f"'2. nama_item = penjelasan singkat', dst — pakai tanda '=' setelah nama item, JANGAN pakai bold/asterisk.\n\n"
+        f"BATASAN TOPIK (PENTING):\n"
+        f"Kamu HANYA membahas nutrisi, gizi, diet, olahraga, dan pola hidup sehat yang berkaitan dengan tujuan user. "
+        f"Kalau ditanya hal di luar itu (contoh: perbandingan mobil, hiburan, politik, teknologi, atau topik apapun "
+        f"yang gak nyambung ke kesehatan/pola makan), TOLAK dengan sopan dan singkat, lalu arahkan balik ke topik "
+        f"nutrisi — jangan tetap dijawab. Contoh pola tolakan: 'Itu di luar topik yang bisa aku bantu ya, aku "
+        f"fokusnya di nutrisi & pola makan 🙂 Ada yang mau ditanya soal itu?'\n\n"
         f"Profil: {user.username}, {user.umur}th, {user.gender}, {user.bb}kg/{user.tb}cm, "
         f"tujuan={user.tujuan}, aktivitas={user.aktivitas}.\n"
         f"BMR={int(user.bmr or 0)} kcal | TDEE={int(user.tdee or 0)} kcal | "
         f"Target: {target_cal} kcal & {target_prot}g protein/hari.\n"
         f"Hari ini ({today}): sudah makan {total_kal_chat} kcal / {total_prot_chat}g protein. "
         f"Makanan: {makanan_chat}. Sisa: {max(0,target_cal-total_kal_chat)} kcal.\n\n"
-        f"Jawab secara spesifik dan personal sesuai data user. "
-        f"Jika ditanya di luar nutrisi/kesehatan, arahkan kembali dengan ramah."
+        f"Jawab spesifik dan personal sesuai data user di atas KALAU relevan sama pertanyaan."
     )
 
     history      = data.get('history', [])
@@ -390,8 +426,13 @@ def ai_voice_command():
 
     # ── Konteks user ──────────────────────────────────────────────────────────
     target_cal, target_prot = get_targets(user)
-    today   = now_utc().date()
-    jam_wib = (now_utc().hour + 7) % 24
+    # FIX: sebelumnya `today = now_utc().date()` pakai tanggal UTC langsung.
+    # Antara jam 00:00-06:59 WIB, tanggal UTC masih "kemarin" (WIB = UTC+7),
+    # jadi data yang dicatat Jarvis dini hari nyasar ke tanggal kemarin dan
+    # gak nongol di dashboard (yang pakai tanggal WIB / hari ini beneran).
+    now_wib = now_utc() + timedelta(hours=7)
+    today   = now_wib.date()
+    jam_wib = now_wib.hour
     if   5  <= jam_wib < 10: waktu_default = 'Pagi'
     elif 10 <= jam_wib < 15: waktu_default = 'Siang'
     elif 15 <= jam_wib < 18: waktu_default = 'Sore'
