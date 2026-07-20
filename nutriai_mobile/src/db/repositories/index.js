@@ -1,46 +1,27 @@
-/**
- * db/repositories/index.js
- *
- * Repository pattern — satu class per entity.
- * Semua screen/service pakai ini untuk baca/tulis data.
- *
- * Prinsip:
- *  - Setiap write otomatis set sync_status='pending' + updated_at=now
- *  - Read selalu dari LocalDB (instant, offline-safe)
- *  - sync_id adalah global identifier antara HP dan server
- */
+import { generateUUID, getDB, nowISO, todayStr } from "../LocalDB";
 
-import { getDB, generateUUID, nowISO, todayStr, SYNC_STATUS } from '../LocalDB';
-
-// ─── Base helper ─────────────────────────────────────
-
-function db() { return getDB(); }
-
-// ═══════════════════════════════════════════════════
-//  FOOD REPOSITORY
-//  Cache dari food database server (is_verified = true kebanyakan)
-//  User juga bisa tambah food baru (is_verified = false, pending sync)
-// ═══════════════════════════════════════════════════
+function db() {
+  return getDB();
+}
 
 export const FoodRepo = {
-  /** Cari makanan by nama (debounced dari screen) */
   async search(query, limit = 15) {
     const rows = await db().getAllAsync(
       `SELECT * FROM food
        WHERE nama_makanan LIKE ? AND deleted_at IS NULL
        ORDER BY is_verified DESC, nama_makanan ASC
        LIMIT ?`,
-      [`%${query}%`, limit]
+      [`%${query}%`, limit],
     );
     return rows;
   },
 
-  /** Ambil semua makanan (untuk sync atau seeding) */
   async getAll() {
-    return db().getAllAsync('SELECT * FROM food WHERE deleted_at IS NULL ORDER BY nama_makanan');
+    return db().getAllAsync(
+      "SELECT * FROM food WHERE deleted_at IS NULL ORDER BY nama_makanan",
+    );
   },
 
-  /** Tambah/update makanan dari server (sync pull) */
   async upsertFromServer(foods = []) {
     const stmt = await db().prepareAsync(
       `INSERT INTO food (server_id, nama_makanan, protein, kalori, karbo, lemak, serat,
@@ -52,14 +33,24 @@ export const FoodRepo = {
          kalori=excluded.kalori, karbo=excluded.karbo, lemak=excluded.lemak,
          serat=excluded.serat, gram_per_porsi=excluded.gram_per_porsi,
          image=excluded.image, is_verified=excluded.is_verified,
-         sync_status='synced', updated_at=excluded.updated_at`
+         sync_status='synced', updated_at=excluded.updated_at`,
     );
     try {
       for (const f of foods) {
         await stmt.executeAsync([
-          f.id, f.nama_makanan, f.protein, f.kalori, f.karbo ?? 0, f.lemak ?? 0,
-          f.serat ?? 0, f.gram_per_porsi ?? 100, f.image ?? null, f.is_verified ? 1 : 0,
-          f.sync_id ?? generateUUID(), f.updated_at ?? nowISO(), f.created_at ?? nowISO(),
+          f.id,
+          f.nama_makanan,
+          f.protein,
+          f.kalori,
+          f.karbo ?? 0,
+          f.lemak ?? 0,
+          f.serat ?? 0,
+          f.gram_per_porsi ?? 100,
+          f.image ?? null,
+          f.is_verified ? 1 : 0,
+          f.sync_id ?? generateUUID(),
+          f.updated_at ?? nowISO(),
+          f.created_at ?? nowISO(),
         ]);
       }
     } finally {
@@ -67,7 +58,6 @@ export const FoodRepo = {
     }
   },
 
-  /** User tambah makanan baru (offline-friendly) */
   async insert(food) {
     const sync_id = generateUUID();
     const now = nowISO();
@@ -75,36 +65,37 @@ export const FoodRepo = {
       `INSERT INTO food (nama_makanan, protein, kalori, karbo, lemak, serat,
         gram_per_porsi, is_verified, sync_id, sync_status, updated_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 'pending', ?, ?)`,
-      [food.nama_makanan, food.protein, food.kalori, food.karbo ?? 0,
-       food.lemak ?? 0, food.serat ?? 0, food.gram_per_porsi ?? 100,
-       sync_id, now, now]
+      [
+        food.nama_makanan,
+        food.protein,
+        food.kalori,
+        food.karbo ?? 0,
+        food.lemak ?? 0,
+        food.serat ?? 0,
+        food.gram_per_porsi ?? 100,
+        sync_id,
+        now,
+        now,
+      ],
     );
     return { id: result.lastInsertRowId, sync_id };
   },
 
-  /** Ambil pending foods (belum sync ke server) */
   async getPending() {
     return db().getAllAsync("SELECT * FROM food WHERE sync_status='pending'");
   },
 
-  /** Mark foods sebagai synced setelah server ack */
   async markSynced(syncIds = []) {
     if (!syncIds.length) return;
-    const placeholders = syncIds.map(() => '?').join(',');
+    const placeholders = syncIds.map(() => "?").join(",");
     await db().runAsync(
       `UPDATE food SET sync_status='synced', updated_at=? WHERE sync_id IN (${placeholders})`,
-      [nowISO(), ...syncIds]
+      [nowISO(), ...syncIds],
     );
   },
 };
 
-// ═══════════════════════════════════════════════════
-//  DAILY LOG REPOSITORY (waktu_makan)
-//  Ini yang paling sering ditulis saat offline
-// ═══════════════════════════════════════════════════
-
 export const DailyRepo = {
-  /** Ambil semua log hari ini atau tanggal tertentu */
   async getByDate(userId, dateStr = null) {
     const date = dateStr || todayStr();
     const rows = await db().getAllAsync(
@@ -113,43 +104,41 @@ export const DailyRepo = {
        LEFT JOIN food f ON wm.food_id = f.id
        WHERE wm.user_id = ? AND wm.tanggal = ? AND wm.deleted = 0
        ORDER BY wm.created_at ASC`,
-      [userId, date]
+      [userId, date],
     );
-
-    // Group by waktu_makan
     const grouped = { Pagi: [], Siang: [], Sore: [], Malam: [] };
-    let total_kalori = 0, total_protein = 0;
+    let total_kalori = 0,
+      total_protein = 0;
 
     for (const row of rows) {
-      const waktu = row.waktu_makan || 'Pagi';
+      const waktu = row.waktu_makan || "Pagi";
       const item = {
-        id:           row.id,
-        sync_id:      row.sync_id,
-        sync_status:  row.sync_status,
+        id: row.id,
+        sync_id: row.sync_id,
+        sync_status: row.sync_status,
         food: {
           nama_makanan: row.nama_makanan,
-          protein:      row.protein,
-          kalori:       row.kalori,
-          karbo:        row.karbo,
-          lemak:        row.lemak,
-          porsi:        row.porsi,
+          protein: row.protein,
+          kalori: row.kalori,
+          karbo: row.karbo,
+          lemak: row.lemak,
+          porsi: row.porsi,
         },
       };
       if (grouped[waktu]) grouped[waktu].push(item);
-      total_kalori  += row.kalori;
+      total_kalori += row.kalori;
       total_protein += row.protein;
     }
 
     return { grouped, total_kalori, total_protein };
   },
 
-  /** Insert satu atau banyak log (offline-safe) */
   async insertBatch(userId, items = []) {
     const stmt = await db().prepareAsync(
       `INSERT INTO waktu_makan
         (user_id, food_id, nama_makanan, protein, kalori, karbo, lemak, porsi,
          waktu_makan, tanggal, catatan, image, sync_id, sync_status, updated_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
     );
     const inserted = [];
     try {
@@ -160,16 +149,18 @@ export const DailyRepo = {
           userId,
           item.food_id ?? null,
           item.nama_makanan,
-          item.protein  ?? 0,
-          item.kalori   ?? 0,
-          item.karbo    ?? 0,
-          item.lemak    ?? 0,
-          item.porsi    ?? 1,
-          item.waktu_makan ?? 'Pagi',
-          item.tanggal  ?? todayStr(),
-          item.catatan  ?? null,
-          item.image    ?? null,
-          sync_id, now, now,
+          item.protein ?? 0,
+          item.kalori ?? 0,
+          item.karbo ?? 0,
+          item.lemak ?? 0,
+          item.porsi ?? 1,
+          item.waktu_makan ?? "Pagi",
+          item.tanggal ?? todayStr(),
+          item.catatan ?? null,
+          item.image ?? null,
+          sync_id,
+          now,
+          now,
         ]);
         inserted.push({ id: result.lastInsertRowId, sync_id });
       }
@@ -179,27 +170,23 @@ export const DailyRepo = {
     return inserted;
   },
 
-  /** Soft delete */
   async delete(id) {
     await db().runAsync(
       `UPDATE waktu_makan SET deleted=1, sync_status='pending', updated_at=? WHERE id=?`,
-      [nowISO(), id]
+      [nowISO(), id],
     );
   },
 
-  /** Ambil semua pending rows untuk sync */
   async getPending(userId) {
     return db().getAllAsync(
       `SELECT * FROM waktu_makan WHERE user_id=? AND sync_status='pending'`,
-      [userId]
+      [userId],
     );
   },
 
-  /** Update server_id setelah server ack (untuk referensi delete/edit) */
   async updateServerIds(acks = []) {
-    // acks = [{sync_id, server_id}]
     const stmt = await db().prepareAsync(
-      `UPDATE waktu_makan SET server_id=?, sync_status='synced', updated_at=? WHERE sync_id=?`
+      `UPDATE waktu_makan SET server_id=?, sync_status='synced', updated_at=? WHERE sync_id=?`,
     );
     try {
       for (const ack of acks) {
@@ -210,7 +197,6 @@ export const DailyRepo = {
     }
   },
 
-  /** Upsert dari server (sync pull) */
   async upsertFromServer(userId, items = []) {
     const stmt = await db().prepareAsync(
       `INSERT INTO waktu_makan
@@ -222,16 +208,24 @@ export const DailyRepo = {
          karbo=excluded.karbo, lemak=excluded.lemak,
          porsi=excluded.porsi, deleted=excluded.deleted,
          server_id=excluded.server_id, sync_status='synced', updated_at=excluded.updated_at
-       WHERE excluded.updated_at > waktu_makan.updated_at`
+       WHERE excluded.updated_at > waktu_makan.updated_at`,
     );
     try {
       for (const item of items) {
         await stmt.executeAsync([
-          item.id, userId, item.food_id ?? null,
-          item.nama_makanan, item.protein ?? 0, item.kalori ?? 0,
-          item.karbo ?? 0, item.lemak ?? 0, item.porsi ?? 1,
-          item.waktu_makan ?? 'Pagi', item.tanggal ?? todayStr(),
-          item.catatan ?? null, item.image ?? null,
+          item.id,
+          userId,
+          item.food_id ?? null,
+          item.nama_makanan,
+          item.protein ?? 0,
+          item.kalori ?? 0,
+          item.karbo ?? 0,
+          item.lemak ?? 0,
+          item.porsi ?? 1,
+          item.waktu_makan ?? "Pagi",
+          item.tanggal ?? todayStr(),
+          item.catatan ?? null,
+          item.image ?? null,
           item.deleted ? 1 : 0,
           item.sync_id ?? generateUUID(),
           item.updated_at ?? nowISO(),
@@ -244,16 +238,12 @@ export const DailyRepo = {
   },
 };
 
-// ═══════════════════════════════════════════════════
-//  WEIGHT REPOSITORY
-// ═══════════════════════════════════════════════════
-
 export const WeightRepo = {
   async getHistory(userId, limit = 30) {
     return db().getAllAsync(
       `SELECT * FROM weight_history WHERE user_id=? AND deleted=0
        ORDER BY tanggal DESC LIMIT ?`,
-      [userId, limit]
+      [userId, limit],
     );
   },
 
@@ -261,24 +251,22 @@ export const WeightRepo = {
     const date = todayStr();
     const now = nowISO();
     const sync_id = generateUUID();
-
-    // Cek apakah sudah ada entry hari ini
     const existing = await db().getFirstAsync(
-      'SELECT id FROM weight_history WHERE user_id=? AND tanggal=?',
-      [userId, date]
+      "SELECT id FROM weight_history WHERE user_id=? AND tanggal=?",
+      [userId, date],
     );
 
     if (existing) {
       await db().runAsync(
         `UPDATE weight_history SET berat=?, catatan=?, sync_status='pending', updated_at=? WHERE id=?`,
-        [berat, catatan, now, existing.id]
+        [berat, catatan, now, existing.id],
       );
       return { id: existing.id, updated: true };
     } else {
       const result = await db().runAsync(
         `INSERT INTO weight_history (user_id, berat, tanggal, catatan, sync_id, sync_status, updated_at, created_at)
          VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
-        [userId, berat, date, catatan, sync_id, now, now]
+        [userId, berat, date, catatan, sync_id, now, now],
       );
       return { id: result.lastInsertRowId, updated: false };
     }
@@ -287,7 +275,7 @@ export const WeightRepo = {
   async getPending(userId) {
     return db().getAllAsync(
       `SELECT * FROM weight_history WHERE user_id=? AND sync_status='pending'`,
-      [userId]
+      [userId],
     );
   },
 
@@ -299,15 +287,20 @@ export const WeightRepo = {
          berat=excluded.berat, catatan=excluded.catatan,
          server_id=excluded.server_id, deleted=excluded.deleted,
          sync_status='synced', updated_at=excluded.updated_at
-       WHERE excluded.updated_at > weight_history.updated_at`
+       WHERE excluded.updated_at > weight_history.updated_at`,
     );
     try {
       for (const item of items) {
         await stmt.executeAsync([
-          item.id, userId, item.berat, item.tanggal,
-          item.catatan ?? null, item.deleted ? 1 : 0,
+          item.id,
+          userId,
+          item.berat,
+          item.tanggal,
+          item.catatan ?? null,
+          item.deleted ? 1 : 0,
           item.sync_id ?? generateUUID(),
-          item.updated_at ?? nowISO(), item.created_at ?? nowISO(),
+          item.updated_at ?? nowISO(),
+          item.created_at ?? nowISO(),
         ]);
       }
     } finally {
@@ -318,14 +311,10 @@ export const WeightRepo = {
   async markSynced(userId) {
     await db().runAsync(
       `UPDATE weight_history SET sync_status='synced' WHERE user_id=? AND sync_status='pending'`,
-      [userId]
+      [userId],
     );
   },
 };
-
-// ═══════════════════════════════════════════════════
-//  WATER REPOSITORY
-// ═══════════════════════════════════════════════════
 
 export const WaterRepo = {
   async getTodayTotal(userId) {
@@ -333,7 +322,7 @@ export const WaterRepo = {
     const row = await db().getFirstAsync(
       `SELECT COALESCE(SUM(jumlah_ml), 0) as total FROM water_log
        WHERE user_id=? AND tanggal=? AND deleted=0`,
-      [userId, date]
+      [userId, date],
     );
     return row?.total ?? 0;
   },
@@ -344,7 +333,7 @@ export const WaterRepo = {
     const result = await db().runAsync(
       `INSERT INTO water_log (user_id, jumlah_ml, tanggal, sync_id, sync_status, updated_at, created_at)
        VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
-      [userId, jumlah_ml, todayStr(), sync_id, now, now]
+      [userId, jumlah_ml, todayStr(), sync_id, now, now],
     );
     return { id: result.lastInsertRowId, sync_id };
   },
@@ -352,7 +341,7 @@ export const WaterRepo = {
   async getPending(userId) {
     return db().getAllAsync(
       `SELECT * FROM water_log WHERE user_id=? AND sync_status='pending'`,
-      [userId]
+      [userId],
     );
   },
 
@@ -363,15 +352,19 @@ export const WaterRepo = {
        ON CONFLICT(sync_id) DO UPDATE SET
          jumlah_ml=excluded.jumlah_ml, deleted=excluded.deleted,
          server_id=excluded.server_id, sync_status='synced', updated_at=excluded.updated_at
-       WHERE excluded.updated_at > water_log.updated_at`
+       WHERE excluded.updated_at > water_log.updated_at`,
     );
     try {
       for (const item of items) {
         await stmt.executeAsync([
-          item.id, userId, item.jumlah_ml, item.tanggal,
+          item.id,
+          userId,
+          item.jumlah_ml,
+          item.tanggal,
           item.deleted ? 1 : 0,
           item.sync_id ?? generateUUID(),
-          item.updated_at ?? nowISO(), item.created_at ?? nowISO(),
+          item.updated_at ?? nowISO(),
+          item.created_at ?? nowISO(),
         ]);
       }
     } finally {
@@ -382,14 +375,10 @@ export const WaterRepo = {
   async markSynced(userId) {
     await db().runAsync(
       `UPDATE water_log SET sync_status='synced' WHERE user_id=? AND sync_status='pending'`,
-      [userId]
+      [userId],
     );
   },
 };
-
-// ═══════════════════════════════════════════════════
-//  LAPORAN REPOSITORY
-// ═══════════════════════════════════════════════════
 
 export const LaporanRepo = {
   async getAll(userId, page = 1, limit = 15) {
@@ -397,14 +386,15 @@ export const LaporanRepo = {
     const rows = await db().getAllAsync(
       `SELECT * FROM laporan WHERE user_id=?
        ORDER BY tanggal DESC LIMIT ? OFFSET ?`,
-      [userId, limit, offset]
+      [userId, limit, offset],
     );
     const count = await db().getFirstAsync(
-      'SELECT COUNT(*) as total FROM laporan WHERE user_id=?', [userId]
+      "SELECT COUNT(*) as total FROM laporan WHERE user_id=?",
+      [userId],
     );
     return {
-      laporan:  rows,
-      total:    count?.total ?? 0,
+      laporan: rows,
+      total: count?.total ?? 0,
       has_more: count?.total > page * limit,
     };
   },
@@ -416,14 +406,18 @@ export const LaporanRepo = {
        ON CONFLICT(sync_id) DO UPDATE SET
          total_protein=excluded.total_protein, total_kalori=excluded.total_kalori,
          total_karbo=excluded.total_karbo, total_lemak=excluded.total_lemak,
-         server_id=excluded.server_id, sync_status='synced'`
+         server_id=excluded.server_id, sync_status='synced'`,
     );
     try {
       for (const item of items) {
         await stmt.executeAsync([
-          item.id, userId, item.tanggal,
-          item.total_protein ?? 0, item.total_kalori ?? 0,
-          item.total_karbo ?? 0, item.total_lemak ?? 0,
+          item.id,
+          userId,
+          item.tanggal,
+          item.total_protein ?? 0,
+          item.total_kalori ?? 0,
+          item.total_karbo ?? 0,
+          item.total_lemak ?? 0,
           item.sync_id ?? generateUUID(),
           item.created_at ?? nowISO(),
         ]);
@@ -434,13 +428,9 @@ export const LaporanRepo = {
   },
 };
 
-// ═══════════════════════════════════════════════════
-//  USER REPO (profile cache)
-// ═══════════════════════════════════════════════════
-
 export const UserRepo = {
   async get(userId) {
-    return db().getFirstAsync('SELECT * FROM users WHERE id=?', [userId]);
+    return db().getFirstAsync("SELECT * FROM users WHERE id=?", [userId]);
   },
 
   async upsert(user) {
@@ -456,11 +446,23 @@ export const UserRepo = {
          bmr=excluded.bmr, tdee=excluded.tdee, bmi=excluded.bmi,
          foto_url=excluded.foto_url, sync_status='synced', updated_at=excluded.updated_at`,
       [
-        user.id, user.username, user.bb, user.tb, user.umur,
-        user.gender, user.aktivitas, user.tujuan, user.tipe_tubuh,
-        user.bmr, user.tdee, user.bmi, user.foto_url ?? null,
-        user.sync_id ?? generateUUID(), now, now,
-      ]
+        user.id,
+        user.username,
+        user.bb,
+        user.tb,
+        user.umur,
+        user.gender,
+        user.aktivitas,
+        user.tujuan,
+        user.tipe_tubuh,
+        user.bmr,
+        user.tdee,
+        user.bmi,
+        user.foto_url ?? null,
+        user.sync_id ?? generateUUID(),
+        now,
+        now,
+      ],
     );
   },
 };

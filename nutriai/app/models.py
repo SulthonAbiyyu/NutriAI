@@ -34,11 +34,29 @@ def safe_int(val, default=0) -> int:
         return default
 
 
+def safe_float(val, default=0.0) -> float:
+    """
+    Sama seperti safe_int, tapi untuk angka desimal (protein, kalori,
+    karbo, lemak, serat, gram_per_porsi, dll). PENTING: safe_int TIDAK
+    boleh dipakai untuk field ini karena membuang karakter titik ('.'),
+    sehingga "10.9" malah jadi 109 alih-alih 10.9.
+    """
+    try:
+        s = str(val).strip().replace(',', '.')       # jaga-jaga kalau user ketik pakai koma
+        s = re.sub(r'[^0-9.\-]', '', s)                # buang karakter selain digit/titik/minus
+        if s in ('', '-', '.', '-.'):
+            return default
+        return float(s)
+    except (ValueError, TypeError):
+        return default
+
+
 # ─────────────────────────────────────────────────────────
 #  MODELS
 #  Disesuaikan dengan schema Supabase (PostgreSQL) aktual.
-#  SQLite hanya dipakai sebagai offline cache — kolom
-#  mengikuti Supabase sebagai sumber kebenaran.
+#  SQLite hanya dipakai sebagai engine dev lokal (bukan bagian
+#  dari fitur offline-sync mobile — fitur itu sudah dihapus).
+#  Supabase tetap sumber kebenaran untuk kolom.
 # ─────────────────────────────────────────────────────────
 
 class User(db.Model):
@@ -106,11 +124,17 @@ class Food(db.Model):
     Log harian ada di tabel waktu_makan (denormalized — sudah punya
     kolom nutrisi sendiri, tidak perlu JOIN ke food untuk kalori).
 
-    Kolom user_id & input_from TIDAK ADA di Supabase — dihapus dari model.
+    Kolom input_from TIDAK ADA di Supabase — dihapus dari model.
+
+    user_id: NULL = makanan default/global (bisa dilihat & dipakai semua
+    user). Diisi (angka) = makanan pribadi, cuma pemiliknya sendiri yang
+    bisa lihat & pakai. Ditambahkan supaya user bisa daftarkan makanan
+    baru tanpa "mengotori" database bersama untuk semua orang.
     """
     __tablename__ = 'food'
 
     id             = db.Column(db.Integer,     primary_key=True)
+    user_id        = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
     nama_makanan   = db.Column(db.String(120), nullable=False)
     protein        = db.Column(db.Float,       nullable=False)   # double precision di Supabase
     kalori         = db.Column(db.Float,       nullable=False)
@@ -128,6 +152,7 @@ class Food(db.Model):
     def to_dict(self):
         return {
             'id':             self.id,
+            'user_id':        self.user_id,   # None = makanan global/default
             'nama_makanan':   self.nama_makanan,
             'protein':        self.protein or 0,
             'kalori':         self.kalori or 0,
@@ -326,98 +351,3 @@ class StreakLog(db.Model):
     __table_args__ = (db.UniqueConstraint('user_id', 'tanggal', name='uq_streak_user_date'),)
 
     user = db.relationship('User', backref='streak_logs', lazy=True)
-
-
-# ─────────────────────────────────────────────────────────
-#  SAFE MIGRATION — khusus SQLite offline cache
-#  PostgreSQL/Supabase dikelola via SQL langsung di dashboard.
-#  Fungsi ini HANYA dijalankan saat koneksi ke SQLite.
-# ─────────────────────────────────────────────────────────
-
-def run_safe_migrations():
-    """
-    Tambahkan kolom baru ke SQLite offline cache.
-    Idempotent — aman dijalankan berulang kali.
-    TIDAK dijalankan ke Supabase/PostgreSQL.
-    """
-    # Hanya jalankan untuk SQLite
-    if 'sqlite' not in str(db.engine.url):
-        print("  ℹ run_safe_migrations: skip (bukan SQLite)")
-        return
-
-    migrations = [
-        # ── users ──
-        ('users', 'sync_id',    "VARCHAR(36)"),
-        ('users', 'created_at', "DATETIME"),
-        ('users', 'updated_at', "DATETIME"),
-        ('users', 'deleted_at', "DATETIME"),
-        ('users', 'target_bb',  "REAL"),
-        ('users', 'bb_awal',    "REAL"),
-        ('users', 'bmi',        "REAL"),
-        ('users', 'foto_url',   "TEXT"),
-        # ── food ──
-        ('food', 'karbo',          "REAL DEFAULT 0"),
-        ('food', 'lemak',          "REAL DEFAULT 0"),
-        ('food', 'serat',          "REAL DEFAULT 0"),
-        ('food', 'gram_per_porsi', "REAL DEFAULT 100"),
-        ('food', 'is_verified',    "INTEGER DEFAULT 0"),
-        ('food', 'sync_id',        "VARCHAR(36)"),
-        ('food', 'created_at',     "DATETIME"),
-        ('food', 'updated_at',     "DATETIME"),
-        ('food', 'deleted_at',     "DATETIME"),
-        # ── waktu_makan ──
-        ('waktu_makan', 'nama_makanan', "VARCHAR(120)"),
-        ('waktu_makan', 'protein',      "REAL DEFAULT 0"),
-        ('waktu_makan', 'kalori',       "REAL DEFAULT 0"),
-        ('waktu_makan', 'karbo',        "REAL DEFAULT 0"),
-        ('waktu_makan', 'lemak',        "REAL DEFAULT 0"),
-        ('waktu_makan', 'image',        "TEXT"),
-        ('waktu_makan', 'porsi',        "INTEGER DEFAULT 1"),
-        ('waktu_makan', 'catatan',      "TEXT"),
-        ('waktu_makan', 'sync_id',      "VARCHAR(36)"),
-        ('waktu_makan', 'created_at',   "DATETIME"),
-        ('waktu_makan', 'updated_at',   "DATETIME"),
-        ('waktu_makan', 'deleted_at',   "DATETIME"),
-        # ── laporan ──
-        ('laporan', 'total_karbo', "REAL DEFAULT 0"),
-        ('laporan', 'total_lemak', "REAL DEFAULT 0"),
-        ('laporan', 'sync_id',     "VARCHAR(36)"),
-        ('laporan', 'created_at',  "DATETIME"),
-        # ── weight_history ──
-        ('weight_history', 'berat',      "REAL"),
-        ('weight_history', 'deleted_at', "DATETIME"),
-        ('weight_history', 'sync_id',    "VARCHAR(36)"),
-        # ── water_log ──
-        ('water_log', 'jumlah_ml', "INTEGER"),
-    ]
-
-    conn = db.engine.raw_connection()
-    try:
-        cur = conn.cursor()
-        for table, column, col_def in migrations:
-            try:
-                cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
-                conn.commit()
-                print(f"  ✓ SQLite migration: {table}.{column}")
-            except Exception:
-                pass  # Kolom sudah ada, skip
-
-        # Isi sync_id NULL untuk rows existing
-        import uuid as _uuid
-        for table in ['users', 'food', 'waktu_makan', 'laporan']:
-            try:
-                cur.execute(f"SELECT id FROM {table} WHERE sync_id IS NULL LIMIT 1")
-                if cur.fetchone():
-                    cur.execute(f"SELECT id FROM {table} WHERE sync_id IS NULL")
-                    ids = [row[0] for row in cur.fetchall()]
-                    for rid in ids:
-                        cur.execute(
-                            f"UPDATE {table} SET sync_id=? WHERE id=?",
-                            (str(_uuid.uuid4()), rid)
-                        )
-                    conn.commit()
-                    print(f"  ✓ Filled sync_id: {len(ids)} rows in {table}")
-            except Exception as e:
-                print(f"  ⚠ sync_id fill error ({table}): {e}")
-    finally:
-        conn.close()

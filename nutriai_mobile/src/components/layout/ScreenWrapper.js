@@ -1,24 +1,18 @@
-import React from 'react';
+import React from "react";
 import {
-  View, ScrollView, StyleSheet, StatusBar, RefreshControl,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing } from '../../theme';
+  View,
+  ScrollView,
+  StyleSheet,
+  StatusBar,
+  RefreshControl,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Colors, Spacing } from "../../theme";
 
-/**
- * ScreenWrapper — handles StatusBar, SafeArea top padding, and optional scroll
- *
- * @param {boolean}  scroll        - wrap children in ScrollView
- * @param {boolean}  refreshing    - pull-to-refresh state
- * @param {function} onRefresh     - pull-to-refresh handler
- * @param {boolean}  padHorizontal - add horizontal padding (default true)
- * @param {object}   style         - extra styles on container
- * @param {object}   contentStyle  - extra styles on scroll content
- */
 export default function ScreenWrapper({
   children,
-  scroll        = false,
-  refreshing    = false,
+  scroll = false,
+  refreshing = false,
   onRefresh,
   padHorizontal = true,
   style,
@@ -26,11 +20,7 @@ export default function ScreenWrapper({
 }) {
   const insets = useSafeAreaInsets();
 
-  const baseStyle = [
-    styles.container,
-    { paddingTop: insets.top },
-    style,
-  ];
+  const baseStyle = [styles.container, { paddingTop: insets.top }, style];
 
   const contentContainer = [
     padHorizontal && styles.padH,
@@ -41,7 +31,11 @@ export default function ScreenWrapper({
   if (scroll) {
     return (
       <View style={baseStyle}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} translucent />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={Colors.bg}
+          translucent
+        />
         <ScrollView
           style={{ flex: 1, backgroundColor: Colors.bg }}
           contentContainerStyle={contentContainer}
@@ -65,7 +59,11 @@ export default function ScreenWrapper({
 
   return (
     <View style={[baseStyle, padHorizontal && styles.padH]}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} translucent />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Colors.bg}
+        translucent
+      />
       {children}
     </View>
   );

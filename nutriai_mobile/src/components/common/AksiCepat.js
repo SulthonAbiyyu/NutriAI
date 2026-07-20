@@ -1,55 +1,103 @@
-/**
- * AksiCepat.js
- * Layout: 1 row horizontal — 4 item flex rata penuh.
- * Letakkan di: components/common/AksiCepat.js
- */
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Svg, { Circle, Path } from "react-native-svg";
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle } from 'react-native-svg';
+const GREEN = "#22C55E";
+const GREEN_DRK = "#16A34A";
+const GREEN_LT = "#DCFCE7";
+const GREEN_50 = "#ECFDF3";
+const TXT = "#081229";
+const TXT_S = "#64748B";
+const SHD_W = "rgba(15,23,42,0.08)";
 
-const GREEN     = '#22C55E';
-const GREEN_DRK = '#16A34A';
-const GREEN_LT  = '#DCFCE7';
-const GREEN_50  = '#ECFDF3';
-const TXT       = '#081229';
-const TXT_S     = '#64748B';
-const SHD_W     = 'rgba(15,23,42,0.08)';
-
-export default function AksiCepat({ onScan, onInput, onLaporan, onLainnya, width }) {
+export default function AksiCepat({
+  onScan,
+  onInput,
+  onLaporan,
+  onLainnya,
+  width,
+}) {
   const btns = [
     {
-      icon: <Svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke={GREEN_DRK} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <Circle cx="12" cy="13" r="4"/>
-            </Svg>,
-      top: 'Scan',    bot: 'Makanan',    bg: [GREEN_50, GREEN_LT],   fn: onScan,
+      icon: (
+        <Svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={GREEN_DRK}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <Circle cx="12" cy="13" r="4" />
+        </Svg>
+      ),
+      top: "Scan",
+      bot: "Makanan",
+      bg: [GREEN_50, GREEN_LT],
+      fn: onScan,
     },
     {
-      icon: <Svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="#4F46E5" strokeWidth="2" strokeLinecap="round">
-              <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
-            </Svg>,
-      top: 'Input',   bot: 'Makanan',    bg: ['#EEF2FF', '#C7D2FE'], fn: onInput,
+      icon: (
+        <Svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#4F46E5"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        </Svg>
+      ),
+      top: "Input",
+      bot: "Makanan",
+      bg: ["#EEF2FF", "#C7D2FE"],
+      fn: onInput,
     },
     {
-      icon: <Svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="#4F46E5" strokeWidth="2" strokeLinecap="round">
-              <Path d="M18 20V10M12 20V4M6 20v-6"/>
-            </Svg>,
-      top: 'Laporan', bot: 'Progress',   bg: ['#EEF2FF', '#C7D2FE'], fn: onLaporan,
+      icon: (
+        <Svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#4F46E5"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <Path d="M18 20V10M12 20V4M6 20v-6" />
+        </Svg>
+      ),
+      top: "Laporan",
+      bot: "Progress",
+      bg: ["#EEF2FF", "#C7D2FE"],
+      fn: onLaporan,
     },
     {
-      icon: <Svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="#DC2626" strokeWidth="2" strokeLinecap="round">
-              <Circle cx="8"  cy="8"  r="3"/>
-              <Circle cx="16" cy="8"  r="3"/>
-              <Circle cx="8"  cy="16" r="3"/>
-              <Circle cx="16" cy="16" r="3"/>
-            </Svg>,
-      top: 'Lainnya', bot: 'Fitur Lain', bg: ['#FEE2E2', '#FECACA'], fn: onLainnya,
+      icon: (
+        <Svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#DC2626"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <Circle cx="8" cy="8" r="3" />
+          <Circle cx="16" cy="8" r="3" />
+          <Circle cx="8" cy="16" r="3" />
+          <Circle cx="16" cy="16" r="3" />
+        </Svg>
+      ),
+      top: "Lainnya",
+      bot: "Fitur Lain",
+      bg: ["#FEE2E2", "#FECACA"],
+      fn: onLainnya,
     },
   ];
 
@@ -70,7 +118,8 @@ export default function AksiCepat({ onScan, onInput, onLaporan, onLainnya, width
           >
             <LinearGradient
               colors={b.bg}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={st.aksiBubble}
             >
               {b.icon}
@@ -86,7 +135,7 @@ export default function AksiCepat({ onScan, onInput, onLaporan, onLainnya, width
 
 const st = StyleSheet.create({
   aksiCard: {
-    backgroundColor: 'rgba(255,255,255,0.90)',
+    backgroundColor: "rgba(255,255,255,0.90)",
     borderRadius: 26,
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -96,33 +145,33 @@ const st = StyleSheet.create({
     shadowRadius: 22,
     elevation: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.70)',
+    borderColor: "rgba(255,255,255,0.70)",
   },
   aksiHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 6,
   },
-  aksiTitle: { fontSize: 11, fontWeight: '700', color: TXT_S },
+  aksiTitle: { fontSize: 11, fontWeight: "700", color: TXT_S },
 
   aksiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',       // center vertical agar tidak lonjong
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   aksiItem: {
     flex: 1,
     flexShrink: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
 
   aksiBubble: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 4,
     shadowColor: SHD_W,
     shadowOffset: { width: 0, height: 3 },
@@ -131,6 +180,11 @@ const st = StyleSheet.create({
     elevation: 3,
   },
 
-  aksiTop: { fontSize: 11, fontWeight: '700', color: TXT, textAlign: 'center' },
-  aksiBot: { fontSize: 9,  fontWeight: '500', color: TXT_S, textAlign: 'center' },
+  aksiTop: { fontSize: 11, fontWeight: "700", color: TXT, textAlign: "center" },
+  aksiBot: {
+    fontSize: 9,
+    fontWeight: "500",
+    color: TXT_S,
+    textAlign: "center",
+  },
 });

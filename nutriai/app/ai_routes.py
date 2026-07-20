@@ -756,6 +756,7 @@ ATURAN TEKNIS:
                 existing = Food.query.filter(
                     Food.nama_makanan.ilike(nama),
                     Food.deleted_at.is_(None),
+                    db.or_(Food.user_id.is_(None), Food.user_id == user.id),
                 ).first()
                 if existing:
                     action_result.update({
@@ -851,7 +852,7 @@ ATURAN TEKNIS:
 
         elif intent == 'add_water':
             ml = max(50, min(int(params.get('jumlah_ml') or 250), 2000))
-            db.session.add(WaterLog(user_id=user.id, ml=ml, tanggal=today))
+            db.session.add(WaterLog(user_id=user.id, jumlah_ml=ml, tanggal=today))
             db.session.commit()
             total_ml_baru = db.session.query(db.func.sum(WaterLog.jumlah_ml)).filter(
                 WaterLog.user_id == user.id,
@@ -1047,9 +1048,13 @@ def ai_confirm_tambah_data():
 
     # Cek duplikat lagi — bisa aja makanan ini sempat ditambahkan orang lain
     # di antara waktu estimasi (voice-command) dan waktu user tekan "Simpan".
+    # HANYA cek makanan yang bisa dilihat user ini (global + milik sendiri) —
+    # jangan blokir gara-gara makanan pribadi user LAIN kebetulan nama sama,
+    # karena itu tidak pernah kelihatan olehnya juga (pesan akan membingungkan).
     existing = Food.query.filter(
         Food.nama_makanan.ilike(nama),
         Food.deleted_at.is_(None),
+        db.or_(Food.user_id.is_(None), Food.user_id == user.id),
     ).first()
     if existing:
         return jsonify({
@@ -1080,6 +1085,11 @@ def ai_confirm_tambah_data():
         image_path = f'{upload_folder}/{filename}'.replace('\\', '/')
 
     food_baru = Food(
+        user_id        = user.id,   # FIX: sebelumnya tidak diisi (default NULL) —
+                                     # jadinya nyasar tersimpan sebagai makanan
+                                     # master/global (kelihatan semua user),
+                                     # padahal ini harusnya makanan pribadi
+                                     # milik user yang menambahkannya lewat Jarvis.
         nama_makanan   = nama,
         kalori         = kalori,
         protein        = protein,
@@ -1088,7 +1098,6 @@ def ai_confirm_tambah_data():
         serat          = serat,
         gram_per_porsi = gram_per_porsi,
         image          = image_path,
-        input_from     = 'tambah data',
         is_verified    = False,
     )
     db.session.add(food_baru)

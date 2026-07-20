@@ -9,9 +9,10 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
-from app.models import db, run_safe_migrations
+from app.models import db
 from app.routes import main_bp
 from app.ai_routes import ai_bp
+from app.admin_routes import admin_bp
 
 
 # ─────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ app = Flask(__name__)
 _allowed_origins = os.environ.get('ALLOWED_ORIGINS', '*')
 CORS(app, origins=_allowed_origins if _allowed_origins != '*' else '*')
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///nutri_ai.db')
+DATABASE_URL = os.environ.get('DATABASE_URL') or (_ for _ in ()).throw(RuntimeError('DATABASE_URL wajib diset di .env (proyek ini full pakai Supabase/PostgreSQL, tidak ada fallback SQLite lagi)'))  # noqa
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
@@ -47,15 +48,19 @@ jwt     = JWTManager(app)
 # ─────────────────────────────────────────────────────────
 app.register_blueprint(main_bp)
 app.register_blueprint(ai_bp)
+app.register_blueprint(admin_bp)
 
 
 # ─────────────────────────────────────────────────────────
-#  DB INIT + MIGRATION
+#  DB INIT
 # ─────────────────────────────────────────────────────────
+# FIX: run_safe_migrations() dihapus — itu cuma migrasi kolom khusus untuk
+# SQLite dev lokal (proyek ini sudah full Supabase/PostgreSQL, jadi fungsi
+# itu tidak pernah benar-benar berjalan, cuma nge-print skip tiap start).
+# Kolom baru di Postgres/Supabase dikelola manual lewat SQL Editor di
+# dashboard Supabase, bukan lewat kode ini.
 with app.app_context():
     db.create_all()
-    print("Running safe migrations...")
-    run_safe_migrations()
     print("Database ready ✓")
 
 

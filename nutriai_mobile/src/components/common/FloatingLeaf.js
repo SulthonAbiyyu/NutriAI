@@ -1,6 +1,5 @@
-import React from 'react';
-import { Image } from 'react-native';
-import DaunImg from '../../../assets/daun1.png';
+import { Image } from "react-native";
+import DaunImg from "../../../assets/daun1.png";
 
 export default function FloatingLeaf() {
   return (
@@ -9,10 +8,10 @@ export default function FloatingLeaf() {
       style={{
         width: 112,
         height: 112,
-        resizeMode: 'contain',
+        resizeMode: "contain",
         flexShrink: 0,
-        marginRight: -65,  // lebih rapat ke BmiCard
-        marginTop: -22,    // naik
+        marginRight: -65,
+        marginTop: -22,
       }}
     />
   );

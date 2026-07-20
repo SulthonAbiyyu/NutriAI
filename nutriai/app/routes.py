@@ -1,5 +1,10 @@
 import os
-from datetime import datetime, timedelta, timezone
+import re
+import time
+import logging
+from collections import defaultdict
+from datetime import datetime, timedelta
+from functools import wraps
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
@@ -11,10 +16,65 @@ from werkzeug.utils import secure_filename
 from app.models import (
     db, User, Food, WaktuMakan, Laporan,
     WeightHistory, WaterLog, MealTemplate, MealTemplateItem,
-    StreakLog, now_utc, now_wib_date, safe_int,
+    StreakLog, now_utc, now_wib_date, safe_int, safe_float,
 )
 
 main_bp = Blueprint('main', __name__)
+logger  = logging.getLogger('nutriai.security')
+
+
+# ─────────────────────────────────────────────────────────
+#  SECURITY: rate limiter ringan (in-memory, per-proses)
+# ─────────────────────────────────────────────────────────
+# CATATAN PENTING: ini sengaja dibuat sederhana (tanpa dependency baru)
+# supaya bisa langsung jalan tanpa ubah app factory. Kekurangannya:
+# counter TIDAK dibagi antar worker/proses (kalau nanti pakai gunicorn
+# dengan >1 worker, tiap worker punya counter sendiri) dan akan reset
+# tiap kali server restart. Untuk produksi skala besar, sebaiknya ganti
+# dengan Flask-Limiter + Redis storage. Untuk sekarang, ini cukup untuk
+# menahan brute-force otomatis dari 1 IP di server single-worker.
+_rate_buckets = defaultdict(list)  # key -> list[timestamp]
+
+def rate_limit(max_calls: int, window_seconds: int, key_prefix: str):
+    """Batasi jumlah pemanggilan endpoint per IP dalam periode waktu tertentu."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            ip  = request.headers.get('X-Forwarded-For', request.remote_addr) or 'unknown'
+            key = f'{key_prefix}:{ip}'
+            now = time.time()
+            bucket = _rate_buckets[key]
+            # buang timestamp yang sudah lewat window
+            while bucket and bucket[0] <= now - window_seconds:
+                bucket.pop(0)
+            if len(bucket) >= max_calls:
+                logger.warning('[RateLimit] %s diblokir sementara (IP: %s)', key_prefix, ip)
+                return jsonify({'error': 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.'}), 429
+            bucket.append(now)
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# ─────────────────────────────────────────────────────────
+#  SECURITY: validasi kekuatan password (server-side, wajib —
+#  validasi di frontend BISA di-bypass dengan panggil API langsung)
+# ─────────────────────────────────────────────────────────
+def validate_password_strength(password: str):
+    """Return None kalau valid, atau string pesan error kalau tidak valid."""
+    if not password or len(password) < 8:
+        return 'Password minimal 8 karakter'
+    if not re.search(r'[a-zA-Z]', password):
+        return 'Password harus mengandung minimal 1 huruf'
+    if not re.search(r'[0-9]', password):
+        return 'Password harus mengandung minimal 1 angka'
+    return None
+
+
+ALLOWED_GENDER    = {'laki_laki', 'perempuan'}
+ALLOWED_TUJUAN    = {'bulking', 'cutting', 'maintain'}
+ALLOWED_AKTIVITAS = {'sangat_tidak_aktif', 'aktivitas_ringan', 'aktivitas_sedang', 'aktivitas_berat'}
+ALLOWED_BODYTYPE  = {'ectomorph', 'mesomorph', 'endomorph'}
 
 # ── Supabase (opsional) ───────────────────────────────────
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
@@ -135,7 +195,27 @@ def calc_streak(user_id: int) -> dict:
 #  AUTH
 # ─────────────────────────────────────────────────────────
 
+@main_bp.route('/api/check-username', methods=['GET'])
+@rate_limit(max_calls=30, window_seconds=60, key_prefix='check-username')  # 30x/menit per IP
+def check_username():
+    """Dipakai RegisterScreen.js untuk cek ketersediaan username secara
+    real-time (debounced) sebelum user submit form.
+    Contract: GET /api/check-username?username=xxx -> { available: boolean }
+    """
+    username = (request.args.get('username') or '').strip()
+    if not username:
+        return jsonify({'error': 'Parameter username wajib diisi'}), 400
+
+    # Batasi panjang biar tidak dipakai query sampah/DoS ringan ke DB
+    if len(username) > 50:
+        return jsonify({'error': 'Username terlalu panjang'}), 400
+
+    exists = User.query.filter_by(username=username).first() is not None
+    return jsonify({'available': not exists}), 200
+
+
 @main_bp.route('/api/register', methods=['POST'])
+@rate_limit(max_calls=5, window_seconds=300, key_prefix='register')  # 5x/5menit per IP
 def register():
     try:
         data = request.get_json()
@@ -146,6 +226,23 @@ def register():
         for field in required:
             if field not in data or not str(data[field]).strip():
                 return jsonify({'error': f'Field {field} wajib diisi'}), 400
+
+        # SECURITY: validasi password di SERVER, jangan percaya validasi
+        # frontend saja — orang bisa panggil API ini langsung tanpa app.
+        pw_error = validate_password_strength(data['password'])
+        if pw_error:
+            return jsonify({'error': pw_error}), 400
+
+        # SECURITY: whitelist nilai enum — cegah data sampah/tidak valid
+        # tersimpan (mis. gender:"admin" atau nilai lain di luar opsi UI).
+        if data['gender'] not in ALLOWED_GENDER:
+            return jsonify({'error': 'Gender tidak valid'}), 400
+        if data['tujuan'] not in ALLOWED_TUJUAN:
+            return jsonify({'error': 'Tujuan tidak valid'}), 400
+        if data['aktivitas'] not in ALLOWED_AKTIVITAS:
+            return jsonify({'error': 'Aktivitas tidak valid'}), 400
+        if data['body_type'] not in ALLOWED_BODYTYPE:
+            return jsonify({'error': 'Tipe tubuh tidak valid'}), 400
 
         if User.query.filter_by(username=data['username']).first():
             return jsonify({'error': 'Username sudah dipakai'}), 409
@@ -159,6 +256,21 @@ def register():
             return jsonify({'error': 'Berat badan harus antara 30–300 kg'}), 400
 
         bmr, tdee = hitung_bmr_tdee(bb, tb, umur, data['gender'], data['aktivitas'], data['body_type'])
+
+        # FIX BUG: bb_awal & target_bb sebelumnya TIDAK PERNAH di-set di sini
+        # (tetap NULL selamanya), sehingga frontend selalu jatuh ke fallback
+        # (bb+5 / bb-2) yang dihitung ULANG dari bb TERKINI setiap request.
+        # Akibatnya target "mengejar" bb yang sedang berjalan -> progress bar
+        # goal jadi konstan (mis. selalu ~28%) dan TIDAK PERNAH mencerminkan
+        # progres asli user. bb_awal harus dikunci ke bb saat registrasi, dan
+        # target_bb diberi default masuk akal sesuai tujuan (user bisa ubah
+        # nanti lewat PUT /api/profile).
+        default_target = {
+            'bulking':  bb + 5,
+            'cutting':  max(30, bb - 5),
+            'maintain': bb,
+        }.get(data['tujuan'], bb)
+
         user = User(
             username   = data['username'],
             password_hash = generate_password_hash(data['password']),
@@ -168,6 +280,8 @@ def register():
             gender     = data['gender'],
             tipe_tubuh = data['body_type'],
             bmr=bmr, tdee=tdee,
+            bb_awal    = bb,
+            target_bb  = default_target,
         )
         db.session.add(user)
         db.session.commit()
@@ -180,11 +294,15 @@ def register():
     except ValueError:
         return jsonify({'error': 'Format angka tidak valid'}), 400
     except Exception as e:
+        # SECURITY: jangan bocorkan str(e) (detail internal/stack) ke client.
+        # Log detail lengkap hanya di server, balas pesan generik ke user.
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.exception('Error saat register')
+        return jsonify({'error': 'Registrasi gagal, silakan coba lagi'}), 500
 
 
 @main_bp.route('/api/login', methods=['POST'])
+@rate_limit(max_calls=8, window_seconds=300, key_prefix='login')  # 8x/5menit per IP
 def login():
     try:
         data     = request.get_json() or {}
@@ -195,12 +313,15 @@ def login():
 
         user = User.query.filter_by(username=username).filter(User.deleted_at.is_(None)).first()
         if not user or not check_password_hash(user.password_hash, password):
+            # SECURITY: pesan generik — jangan bedakan "username tidak ada"
+            # vs "password salah", supaya tidak bisa dipakai enumerasi username.
             return jsonify({'error': 'Username atau password salah'}), 401
 
         token = create_access_token(identity=str(user.id))
         return jsonify({'token': token, 'user': user.to_dict()}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception('Error saat login')
+        return jsonify({'error': 'Login gagal, silakan coba lagi'}), 500
 
 
 # ─────────────────────────────────────────────────────────
@@ -230,18 +351,49 @@ def update_profile():
         return jsonify({'error': 'Umur harus antara 10–100 tahun'}), 400
     if 'tb' in data and not (100 <= int(data['tb']) <= 250):
         return jsonify({'error': 'Tinggi badan harus antara 100–250 cm'}), 400
-    if 'bb' in data and not (30 <= int(data['bb']) <= 300):
+    # FIX BUG: pakai float(), bukan int() — 'bb' kolomnya Float, validasi
+    # dengan int() membuang desimal (mis. 74.6 lolos padahal harusnya tetap
+    # divalidasi sebagai 74.6, bukan dibulatkan diam-diam jadi 74/75).
+    if 'bb' in data and not (30 <= float(data['bb']) <= 300):
         return jsonify({'error': 'Berat badan harus antara 30–300 kg'}), 400
+    # target_bb & bb_awal: field goal yang sekarang BISA diubah lewat sini
+    # (sebelumnya tidak ada whitelist untuk ini sama sekali, jadi goal user
+    # tidak pernah bisa di-set/reset secara eksplisit).
+    if 'target_bb' in data and not (30 <= float(data['target_bb']) <= 300):
+        return jsonify({'error': 'Target berat badan harus antara 30–300 kg'}), 400
+    if 'bb_awal' in data and not (30 <= float(data['bb_awal']) <= 300):
+        return jsonify({'error': 'Berat badan awal harus antara 30–300 kg'}), 400
+    # SECURITY: whitelist enum — cegah nilai sembarangan tersimpan lewat
+    # request langsung ke API (bypass UI pilihan yang sudah dibatasi).
+    if 'gender' in data and data['gender'] not in ALLOWED_GENDER:
+        return jsonify({'error': 'Gender tidak valid'}), 400
+    if 'tujuan' in data and data['tujuan'] not in ALLOWED_TUJUAN:
+        return jsonify({'error': 'Tujuan tidak valid'}), 400
+    if 'aktivitas' in data and data['aktivitas'] not in ALLOWED_AKTIVITAS:
+        return jsonify({'error': 'Aktivitas tidak valid'}), 400
+    if 'tipe_tubuh' in data and data['tipe_tubuh'] not in ALLOWED_BODYTYPE:
+        return jsonify({'error': 'Tipe tubuh tidak valid'}), 400
 
-    for field in ['umur', 'tb', 'bb', 'tujuan', 'aktivitas', 'tipe_tubuh', 'gender']:
+    for field in ['umur', 'tb', 'bb', 'tujuan', 'aktivitas', 'tipe_tubuh', 'gender', 'target_bb', 'bb_awal']:
         if field in data:
-            setattr(user, field, data[field])
+            # bb/tb/umur/target_bb/bb_awal semua numerik — cast eksplisit
+            # supaya tidak nyimpen string dari JSON mentah-mentah.
+            if field in ('bb', 'target_bb', 'bb_awal'):
+                setattr(user, field, float(data[field]))
+            elif field in ('umur', 'tb'):
+                setattr(user, field, int(data[field]))
+            else:
+                setattr(user, field, data[field])
 
     user.bmr, user.tdee = hitung_bmr_tdee(
         user.bb, user.tb, user.umur, user.gender, user.aktivitas, user.tipe_tubuh
     )
 
-    if 'bb' in data and int(data['bb']) != old_bb:
+    # FIX BUG: dulu dibandingkan int(data['bb']) != old_bb (old_bb float) —
+    # kalau user ganti dari 74.6 ke 74.8, int() keduanya bisa sama-sama 74
+    # atau 75, sehingga histori berat kadang GAGAL tercatat padahal beratnya
+    # memang berubah. Sekarang dibandingkan sebagai float.
+    if 'bb' in data and float(data['bb']) != old_bb:
         db.session.add(WeightHistory(
             user_id=user.id, berat=user.bb,
             catatan=data.get('catatan_berat', ''),
@@ -253,6 +405,7 @@ def update_profile():
 
 @main_bp.route('/api/profile/password', methods=['PUT'])
 @jwt_required()
+@rate_limit(max_calls=5, window_seconds=300, key_prefix='change_password')
 def update_password():
     user = get_current_user()
     if not user:
@@ -267,8 +420,11 @@ def update_password():
         return jsonify({'error': 'Password lama dan baru wajib diisi'}), 400
     if not check_password_hash(user.password_hash, old_pw):
         return jsonify({'error': 'Password lama tidak sesuai'}), 400
-    if len(new_pw) < 6:
-        return jsonify({'error': 'Password baru minimal 6 karakter'}), 400
+    # SECURITY: samakan kekuatan minimal dengan endpoint register — jangan
+    # sampai user bisa "downgrade" ke password lemah lewat endpoint ini.
+    pw_error = validate_password_strength(new_pw)
+    if pw_error:
+        return jsonify({'error': pw_error}), 400
     if confirm and new_pw != confirm:
         return jsonify({'error': 'Konfirmasi password tidak cocok'}), 400
 
@@ -309,11 +465,18 @@ def update_profile_picture():
 @main_bp.route('/api/foods', methods=['GET'])
 @jwt_required()
 def get_foods():
+    user  = get_current_user()
     q     = request.args.get('q', '').strip()
     page  = max(int(request.args.get('page',  1)), 1)
     limit = min(int(request.args.get('limit', 20)), 100)
 
-    query = Food.query.filter(Food.deleted_at.is_(None))
+    # Tampilkan makanan global (user_id NULL, dilihat semua orang) DAN
+    # makanan pribadi milik user yang login sendiri — tidak menampilkan
+    # makanan pribadi milik user lain.
+    query = Food.query.filter(
+        Food.deleted_at.is_(None),
+        db.or_(Food.user_id.is_(None), Food.user_id == user.id),
+    )
     if q:
         query = query.filter(Food.nama_makanan.ilike(f'%{q}%'))
 
@@ -337,15 +500,20 @@ def add_food():
     if not nama_makanan:
         return jsonify({'error': 'Nama makanan wajib diisi'}), 400
 
+    # Cek duplikat HANYA di scope yang bisa dilihat user ini (global + milik
+    # sendiri) — jangan blokir gara-gara nama yang sama persis kebetulan
+    # dipakai user lain di makanan pribadi mereka (yang tidak kelihatan
+    # olehnya juga, jadi pesan "sudah ada" akan membingungkan).
     existing = Food.query.filter(
         Food.nama_makanan.ilike(nama_makanan),
         Food.deleted_at.is_(None),
+        db.or_(Food.user_id.is_(None), Food.user_id == user.id),
     ).first()
     if existing:
         return jsonify({'error': 'Makanan dengan nama ini sudah ada di database'}), 409
 
-    protein = safe_int(request.form.get('protein', 0))
-    kalori  = safe_int(request.form.get('kalori', 0))
+    protein = safe_float(request.form.get('protein', 0))
+    kalori  = safe_float(request.form.get('kalori', 0))
 
     if kalori <= 0 or protein < 0:
         return jsonify({'error': 'Kalori harus > 0, protein tidak boleh negatif'}), 400
@@ -356,14 +524,18 @@ def add_food():
         if file and allowed_file(file.filename):
             image_url = upload_to_supabase(file.read(), secure_filename(file.filename), bucket='foods')
 
+    # user_id diisi = makanan ini pribadi, cuma kelihatan buat user ini
+    # sendiri. Database "utama"/default (user_id NULL) tidak pernah
+    # ditambah lewat endpoint ini — itu cuma diisi manual di awal/seed data.
     food = Food(
+        user_id        = user.id,
         nama_makanan   = nama_makanan,
         protein        = protein,
         kalori         = kalori,
-        karbo          = safe_int(request.form.get('karbo', 0)),
-        lemak          = safe_int(request.form.get('lemak', 0)),
-        serat          = safe_int(request.form.get('serat', 0)),
-        gram_per_porsi = safe_int(request.form.get('gram_per_porsi', 100)),
+        karbo          = safe_float(request.form.get('karbo', 0)),
+        lemak          = safe_float(request.form.get('lemak', 0)),
+        serat          = safe_float(request.form.get('serat', 0)),
+        gram_per_porsi = safe_float(request.form.get('gram_per_porsi', 100)),
         image          = image_url,
     )
     db.session.add(food)
@@ -374,9 +546,17 @@ def add_food():
 @main_bp.route('/api/foods/<int:food_id>', methods=['PUT'])
 @jwt_required()
 def update_food(food_id):
-    food = Food.query.filter_by(id=food_id).filter(Food.deleted_at.is_(None)).first()
+    user = get_current_user()
+    # SECURITY/OWNERSHIP FIX: sebelumnya endpoint ini bisa dipakai untuk
+    # mengedit makanan APAPUN (termasuk makanan global default & makanan
+    # pribadi milik user lain) — tidak ada pengecekan kepemilikan sama
+    # sekali. Sekarang cuma boleh edit makanan yang user_id-nya = diri
+    # sendiri (makanan pribadi miliknya). Makanan global (user_id NULL)
+    # sengaja tidak bisa diedit dari sini — itu database default bersama.
+    food = Food.query.filter_by(id=food_id, user_id=user.id)\
+        .filter(Food.deleted_at.is_(None)).first()
     if not food:
-        return jsonify({'error': 'Makanan tidak ditemukan'}), 404
+        return jsonify({'error': 'Makanan tidak ditemukan, atau bukan milikmu'}), 404
 
     # Pakai request.form (bukan get_json) agar bisa terima FormData + file gambar
     for field in ['nama_makanan', 'protein', 'kalori', 'karbo', 'lemak', 'serat', 'gram_per_porsi']:
@@ -385,7 +565,7 @@ def update_food(food_id):
             if field == 'nama_makanan':
                 setattr(food, field, val.strip())
             else:
-                setattr(food, field, safe_int(val))
+                setattr(food, field, safe_float(val))
 
     # Upload gambar baru kalau ada
     if 'food_image' in request.files:
@@ -402,9 +582,13 @@ def update_food(food_id):
 @main_bp.route('/api/foods/<int:food_id>', methods=['DELETE'])
 @jwt_required()
 def delete_food(food_id):
-    food = Food.query.filter_by(id=food_id).filter(Food.deleted_at.is_(None)).first()
+    user = get_current_user()
+    # SECURITY/OWNERSHIP FIX: sama seperti update_food — cuma boleh hapus
+    # makanan pribadi milik sendiri, bukan makanan global atau milik user lain.
+    food = Food.query.filter_by(id=food_id, user_id=user.id)\
+        .filter(Food.deleted_at.is_(None)).first()
     if not food:
-        return jsonify({'error': 'Makanan tidak ditemukan'}), 404
+        return jsonify({'error': 'Makanan tidak ditemukan, atau bukan milikmu'}), 404
 
     food.deleted_at = now_utc()
     db.session.commit()
@@ -480,15 +664,20 @@ def submit_daily():
             continue
 
         porsi   = int(item['porsi'])
-        protein = safe_int(item['protein'])
-        kalori  = safe_int(item['kalori'])
-        karbo   = safe_int(item.get('karbo', 0))
-        lemak   = safe_int(item.get('lemak', 0))
+        protein = safe_float(item['protein'])
+        kalori  = safe_float(item['kalori'])
+        karbo   = safe_float(item.get('karbo', 0))
+        lemak   = safe_float(item.get('lemak', 0))
 
         # FIX: Food model TIDAK punya kolom 'porsi' — sebelumnya dikirim ke
         # sini dan bikin TypeError setiap kali endpoint ini dipanggil.
         # 'porsi' adalah milik WaktuMakan, bukan Food (Food = master data per-porsi dasar).
         food = Food(
+            user_id        = user.id,   # FIX: sebelumnya tidak diisi (default NULL) —
+                                         # jadinya nyasar tersimpan sebagai makanan
+                                         # master/global (kelihatan semua user),
+                                         # padahal ini makanan pribadi milik user
+                                         # yang submit lewat /api/daily.
             nama_makanan   = item['nama_makanan'],
             protein        = protein,
             kalori         = kalori,
@@ -528,7 +717,13 @@ def submit_daily():
 @jwt_required()
 def delete_daily(waktu_makan_id):
     user  = get_current_user()
-    entry = WaktuMakan.query.filter_by(id=waktu_makan_id).first()
+    # SECURITY FIX (IDOR): sebelumnya query ini TIDAK memfilter user_id,
+    # sehingga user manapun yang login bisa menghapus catatan makan milik
+    # user lain hanya dengan menebak/mengganti waktu_makan_id di request.
+    # Sekarang wajib entry.user_id == user.id, kalau tidak dianggap 404
+    # (bukan 403) supaya penyerang tidak bisa membedakan "ada tapi bukan
+    # milikmu" vs "memang tidak ada" — mencegah enumerasi ID valid.
+    entry = WaktuMakan.query.filter_by(id=waktu_makan_id, user_id=user.id).first()
     if not entry:
         return jsonify({'error': 'Data tidak ditemukan'}), 404
 
@@ -544,7 +739,9 @@ def delete_daily(waktu_makan_id):
 @jwt_required()
 def edit_daily(waktu_makan_id):
     user  = get_current_user()
-    entry = WaktuMakan.query.filter_by(id=waktu_makan_id)\
+    # SECURITY FIX (IDOR): sama seperti delete_daily — tambahkan filter
+    # user_id supaya user tidak bisa mengedit catatan makan milik user lain.
+    entry = WaktuMakan.query.filter_by(id=waktu_makan_id, user_id=user.id)\
         .filter(WaktuMakan.deleted_at.is_(None)).first()
     if not entry:
         return jsonify({'error': 'Data tidak ditemukan'}), 404
@@ -774,12 +971,18 @@ def add_weight():
     else:
         db.session.add(WeightHistory(user_id=user.id, berat=float(bb), catatan=data.get('catatan', '')))
 
-    user.bb = int(round(float(bb)))
+    # FIX BUG: sebelumnya int(round(...)) MEMBULATKAN bb ke bilangan bulat,
+    # padahal weight_history.berat & kolom users.bb sama-sama Float. Efeknya:
+    # WeightTrackerScreen (baca dari weight_history, presisi desimal) dan
+    # GoalCard di Dashboard (baca dari users.bb, sudah dibulatkan) menampilkan
+    # angka berat yang BEDA untuk data yang sama. Sekarang disimpan apa
+    # adanya (float) supaya kedua tempat konsisten.
+    user.bb = round(float(bb), 1)
     user.bmr, user.tdee = hitung_bmr_tdee(
         user.bb, user.tb, user.umur, user.gender, user.aktivitas, user.tipe_tubuh
     )
     db.session.commit()
-    return jsonify({'status': 'success', 'bb': float(bb)}), 201
+    return jsonify({'status': 'success', 'bb': user.bb}), 201
 
 
 # ─────────────────────────────────────────────────────────
@@ -838,8 +1041,11 @@ def get_streak():
 @jwt_required()
 def get_templates():
     user      = get_current_user()
+    # FIX: MealTemplate TIDAK punya kolom deleted_at (lihat models.py —
+    # "Tabel: meal_template — tidak ada sync_id, updated_at, deleted_at di
+    # Supabase"). Tabel ini pakai hard-delete, bukan soft-delete, jadi filter
+    # ini dulu bikin AttributeError setiap kali endpoint ini dipanggil.
     templates = MealTemplate.query.filter_by(user_id=user.id)\
-        .filter(MealTemplate.deleted_at.is_(None))\
         .order_by(MealTemplate.created_at.desc()).all()
     return jsonify([t.to_dict() for t in templates]), 200
 
@@ -859,7 +1065,14 @@ def create_template():
     db.session.flush()
 
     for item in data.get('items', []):
-        food = Food.query.filter_by(id=item.get('food_id')).first()
+        # OWNERSHIP FIX: sebelumnya bisa pakai food_id milik siapa saja
+        # (termasuk makanan pribadi user lain yang seharusnya tidak
+        # kelihatan). Sekarang dibatasi ke makanan yang memang bisa dia lihat.
+        food = Food.query.filter(
+            Food.id == item.get('food_id'),
+            Food.deleted_at.is_(None),
+            db.or_(Food.user_id.is_(None), Food.user_id == user.id),
+        ).first()
         if food:
             db.session.add(MealTemplateItem(
                 template_id=template.id, food_id=food.id,
@@ -874,12 +1087,17 @@ def create_template():
 @jwt_required()
 def delete_template(template_id):
     user     = get_current_user()
-    template = MealTemplate.query.filter_by(id=template_id)\
-        .filter(MealTemplate.deleted_at.is_(None)).first()
+    # SECURITY FIX (IDOR): tetap dipertahankan — filter user_id supaya user
+    # manapun tidak bisa hapus template milik user lain hanya dengan menebak ID.
+    # FIX: MealTemplate tidak punya kolom deleted_at, jadi hapus datanya
+    # betulan (hard-delete) — bukan soft-delete seperti WaktuMakan/Food.
+    # cascade='all, delete-orphan' di relationship items sudah otomatis
+    # menghapus MealTemplateItem terkait juga.
+    template = MealTemplate.query.filter_by(id=template_id, user_id=user.id).first()
     if not template:
         return jsonify({'error': 'Template tidak ditemukan'}), 404
 
-    template.deleted_at = now_utc()
+    db.session.delete(template)
     db.session.commit()
     return jsonify({'status': 'success'}), 200
 
@@ -888,8 +1106,9 @@ def delete_template(template_id):
 @jwt_required()
 def use_template(template_id):
     user     = get_current_user()
-    template = MealTemplate.query.filter_by(id=template_id)\
-        .filter(MealTemplate.deleted_at.is_(None)).first()
+    # SECURITY FIX (IDOR): tetap dipertahankan — filter user_id.
+    # FIX: MealTemplate tidak punya kolom deleted_at, hapus filternya.
+    template = MealTemplate.query.filter_by(id=template_id, user_id=user.id).first()
     if not template:
         return jsonify({'error': 'Template tidak ditemukan'}), 404
 
@@ -899,7 +1118,11 @@ def use_template(template_id):
     added       = 0
 
     for titem in template.items:
-        if titem.deleted_at or not titem.food:
+        # FIX: MealTemplateItem juga tidak punya kolom deleted_at (lihat
+        # models.py — "hanya id, template_id, food_id, porsi di Supabase").
+        # Cek titem.deleted_at sebelumnya akan AttributeError begitu baris
+        # ini sempat kesentuh (setelah get_templates/query di atas dibenerin).
+        if not titem.food:
             continue
         src   = titem.food
         porsi = titem.porsi or 1
@@ -938,135 +1161,3 @@ def use_template(template_id):
     db.session.commit()
     record_streak(user.id, today)
     return jsonify({'status': 'success', 'added': added}), 200
-
-
-# ─────────────────────────────────────────────────────────
-#  SYNC (Offline → Online)
-# ─────────────────────────────────────────────────────────
-
-@main_bp.route('/api/sync/push', methods=['POST'])
-@jwt_required()
-def sync_push():
-    user   = get_current_user()
-    data   = request.get_json() or {}
-    synced = {'food_logs': 0, 'weight_logs': 0, 'water_logs': 0}
-
-    for item in data.get('food_logs', []):
-        sync_id = item.get('sync_id')
-        if not sync_id or WaktuMakan.query.filter_by(sync_id=sync_id).first():
-            continue
-
-        porsi   = int(item.get('porsi', 1))
-        protein = safe_int(item.get('protein', 0))
-        kalori  = safe_int(item.get('kalori', 0))
-        karbo   = safe_int(item.get('karbo', 0))
-        lemak   = safe_int(item.get('lemak', 0))
-
-        # FIX: Food model tidak punya kolom 'porsi'.
-        food_log = Food(
-            nama_makanan = item.get('nama_makanan', ''),
-            protein      = protein,
-            kalori       = kalori,
-            karbo        = karbo,
-            lemak        = lemak,
-        )
-        db.session.add(food_log)
-        db.session.flush()
-        tgl_str = item.get('tanggal', str(now_wib_date()))
-        try:
-            tgl = datetime.strptime(tgl_str, '%Y-%m-%d').date()
-        except ValueError:
-            tgl = now_wib_date()
-
-        # FIX: tambahkan user_id (wajib) dan nilai nutrisi denormalized yang
-        # sebelumnya tidak diisi sama sekali di sini.
-        db.session.add(WaktuMakan(
-            user_id      = user.id,
-            waktu_makan  = item.get('waktu_makan', 'Pagi'),
-            food_id      = food_log.id,
-            nama_makanan = item.get('nama_makanan', ''),
-            protein      = protein * porsi,
-            kalori       = kalori  * porsi,
-            karbo        = karbo   * porsi,
-            lemak        = lemak   * porsi,
-            porsi        = porsi,
-            tanggal      = tgl,
-            sync_id      = sync_id,
-        ))
-        synced['food_logs'] += 1
-
-    for item in data.get('weight_logs', []):
-        sync_id = item.get('sync_id')
-        if not sync_id or WeightHistory.query.filter_by(sync_id=sync_id).first():
-            continue
-        tgl_str = item.get('tanggal', str(now_wib_date()))
-        try:
-            tgl = datetime.strptime(tgl_str, '%Y-%m-%d').date()
-        except ValueError:
-            tgl = now_wib_date()
-        db.session.add(WeightHistory(
-            user_id=user.id, berat=float(item.get('bb', item.get('berat', user.bb))),
-            tanggal=tgl, catatan=item.get('catatan', ''), sync_id=sync_id,
-        ))
-        synced['weight_logs'] += 1
-
-    for item in data.get('water_logs', []):
-        sync_id = item.get('sync_id')
-        if not sync_id or WaterLog.query.filter_by(sync_id=sync_id).first():
-            continue
-        tgl_str = item.get('tanggal', str(now_wib_date()))
-        try:
-            tgl = datetime.strptime(tgl_str, '%Y-%m-%d').date()
-        except ValueError:
-            tgl = now_wib_date()
-        db.session.add(WaterLog(
-            user_id=user.id, jumlah_ml=int(item.get('ml', item.get('jumlah_ml', 250))),
-            tanggal=tgl,
-        ))
-        synced['water_logs'] += 1
-
-    db.session.commit()
-    return jsonify({'status': 'success', 'synced': synced}), 200
-
-
-@main_bp.route('/api/sync/pull', methods=['GET'])
-@jwt_required()
-def sync_pull():
-    user      = get_current_user()
-    since_str = request.args.get('since', '')
-    try:
-        since = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
-    except (ValueError, AttributeError):
-        since = datetime.min.replace(tzinfo=timezone.utc)
-
-    food_logs = WaktuMakan.query.filter(
-        WaktuMakan.user_id    == user.id,
-        WaktuMakan.created_at >= since,
-    ).all()
-    weight_logs = WeightHistory.query.filter(
-        WeightHistory.user_id    == user.id,
-        WeightHistory.created_at >= since,
-        WeightHistory.deleted_at.is_(None),
-    ).all()
-    water_logs = WaterLog.query.filter(
-        WaterLog.user_id    == user.id,
-        WaterLog.created_at >= since,
-    ).all()
-    laporan_list = Laporan.query.filter(
-        Laporan.user_id    == user.id,
-        Laporan.created_at >= since,
-    ).order_by(Laporan.tanggal.desc()).limit(90).all()
-    new_foods = Food.query.filter(
-        Food.updated_at >= since,
-        Food.deleted_at.is_(None),
-    ).limit(200).all()
-
-    return jsonify({
-        'food_logs':   [wm.to_dict() for wm in food_logs],
-        'weight_logs': [w.to_dict()  for w  in weight_logs],
-        'water_logs':  [w.to_dict()  for w  in water_logs],
-        'laporan':     [l.to_dict()  for l  in laporan_list],
-        'foods':       [f.to_dict()  for f  in new_foods],
-        'user':        user.to_dict(),
-        'server_time': now_utc().isoformat(),
-    }), 200

@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { Colors, Radius, Spacing } from '../../theme';
+import React, { useState } from "react";
+import { View, Text, TextInput, StyleSheet } from "react-native";
+import { Colors, Radius, Spacing } from "../../theme";
 
-/**
- * Input
- * @param {string} label
- * @param {string} error
- * @param {string} hint
- */
-export default function Input({ label, error, hint, style, containerStyle, ...props }) {
+export default function Input({
+  label,
+  error,
+  hint,
+  style,
+  containerStyle,
+  ...props
+}) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -18,16 +19,17 @@ export default function Input({ label, error, hint, style, containerStyle, ...pr
         style={[
           styles.input,
           focused && styles.inputFocused,
-          error  && styles.inputError,
+          error && styles.inputError,
           style,
         ]}
         placeholderTextColor={Colors.textMuted}
         onFocus={() => setFocused(true)}
-        onBlur ={() => setFocused(false)}
+        onBlur={() => setFocused(false)}
         {...props}
       />
+
       {error && <Text style={styles.error}>{error}</Text>}
-      {hint  && !error && <Text style={styles.hint}>{hint}</Text>}
+      {hint && !error && <Text style={styles.hint}>{hint}</Text>}
     </View>
   );
 }
@@ -35,7 +37,7 @@ export default function Input({ label, error, hint, style, containerStyle, ...pr
 const styles = StyleSheet.create({
   label: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
     marginBottom: 6,
   },
@@ -50,7 +52,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   inputFocused: { borderColor: Colors.primary },
-  inputError:   { borderColor: Colors.danger },
-  error: { fontSize: 12, color: Colors.danger, marginTop: 4, fontWeight: '500' },
-  hint:  { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  inputError: { borderColor: Colors.danger },
+  error: {
+    fontSize: 12,
+    color: Colors.danger,
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  hint: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
 });

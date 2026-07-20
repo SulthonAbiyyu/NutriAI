@@ -1,12 +1,12 @@
-import api from '../config/api';
+import api from "../config/api";
 
 export const getTemplates = async () => {
-  const res = await api.get('/api/templates');
+  const res = await api.get("/api/templates");
   return res.data;
 };
 
 export const createTemplate = async (payload) => {
-  const res = await api.post('/api/templates', payload);
+  const res = await api.post("/api/templates", payload);
   return res.data;
 };
 

@@ -1,16 +1,16 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, Easing, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet } from 'react-native';
-import ProteinImg from '../../../assets/protein.png';
+import React, { useRef, useEffect } from "react";
+import { View, Text, Animated, Easing, Image } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet } from "react-native";
+import ProteinImg from "../../../assets/protein.png";
 
-const TXT   = '#081229';
-const TXT_S = '#64748B';
-const TXT_M = '#94A3B8';
-const GREEN = '#22C55E';
-const SHD_W = 'rgba(15,23,42,0.08)';
+const TXT = "#081229";
+const TXT_S = "#64748B";
+const TXT_M = "#94A3B8";
+const GREEN = "#22C55E";
+const SHD_W = "rgba(15,23,42,0.08)";
 
-const GRAD_PROT = ['#5FF676', '#14B84B'];
+const GRAD_PROT = ["#5FF676", "#14B84B"];
 
 export default function ProteinCard({ current = 0, target = 150, style }) {
   const pct = Math.min(current / Math.max(target, 1), 1);
@@ -18,25 +18,32 @@ export default function ProteinCard({ current = 0, target = 150, style }) {
   const barAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(barAnim, {
-      toValue: pct, duration: 900,
-      easing: Easing.out(Easing.cubic), useNativeDriver: false,
+      toValue: pct,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
     }).start();
   }, [pct]);
 
   return (
     <View style={[st.nutriCard, style]}>
       <LinearGradient
-        colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.85)']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        colors={["rgba(255,255,255,0.95)", "rgba(255,255,255,0.85)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={st.nutriCardInner}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <View style={st.nutriIconWrap}>
-            <Image source={ProteinImg} style={st.nutriIconImg} resizeMode="contain" />
+            <Image
+              source={ProteinImg}
+              style={st.nutriIconImg}
+              resizeMode="contain"
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={st.nutriLabel}>Protein</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
               <Text style={st.nutriCur}>{current}g</Text>
               <Text style={st.nutriTgt}> / {target}g</Text>
             </View>
@@ -47,16 +54,24 @@ export default function ProteinCard({ current = 0, target = 150, style }) {
         </View>
 
         <View style={st.nutriBarBg}>
-          <Animated.View style={{ overflow: 'hidden', borderRadius: 999, flex: 1 }}>
+          <Animated.View
+            style={{ overflow: "hidden", borderRadius: 999, flex: 1 }}
+          >
             <Animated.View
               style={[
                 st.nutriBarFill,
-                { width: barAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+                {
+                  width: barAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ["0%", "100%"],
+                  }),
+                },
               ]}
             >
               <LinearGradient
                 colors={GRAD_PROT}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
                 style={{ flex: 1, borderRadius: 999 }}
               />
             </Animated.View>
@@ -70,14 +85,14 @@ export default function ProteinCard({ current = 0, target = 150, style }) {
 const st = StyleSheet.create({
   nutriCard: {
     borderRadius: 20,
-    overflow: 'hidden',
+    overflow: "hidden",
     shadowColor: SHD_W,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 1,
     shadowRadius: 18,
     elevation: 5,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.70)',
+    borderColor: "rgba(255,255,255,0.70)",
   },
   nutriCardInner: {
     borderRadius: 20,
@@ -86,19 +101,40 @@ const st = StyleSheet.create({
     paddingBottom: 12,
   },
   nutriIconWrap: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  nutriIcon:    { fontSize: 26, lineHeight: 30 },
+  nutriIcon: { fontSize: 26, lineHeight: 30 },
   nutriIconImg: { width: 28, height: 28 },
-  nutriLabel:   { fontSize: 12, color: TXT_S, fontWeight: '600', marginBottom: 2 },
-  nutriCur:     { fontSize: 18, fontWeight: '900', color: TXT, letterSpacing: -0.5 },
-  nutriTgt:     { fontSize: 13, color: TXT_M, fontWeight: '400' },
-  nutriPct:     { fontSize: 13, fontWeight: '800', alignSelf: 'flex-start', marginTop: 4 },
+  nutriLabel: {
+    fontSize: 12,
+    color: TXT_S,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  nutriCur: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: TXT,
+    letterSpacing: -0.5,
+  },
+  nutriTgt: { fontSize: 13, color: TXT_M, fontWeight: "400" },
+  nutriPct: {
+    fontSize: 13,
+    fontWeight: "800",
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
   nutriBarBg: {
-    height: 9, backgroundColor: 'rgba(0,0,0,0.07)',
-    borderRadius: 999, marginTop: 10, overflow: 'hidden',
+    height: 9,
+    backgroundColor: "rgba(0,0,0,0.07)",
+    borderRadius: 999,
+    marginTop: 10,
+    overflow: "hidden",
   },
   nutriBarFill: { height: 9, borderRadius: 999 },
 });

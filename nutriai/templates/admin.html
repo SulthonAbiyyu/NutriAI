@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Nutri CMS</title>
+<style>
+  :root{
+    --ink:#1c1f1a;
+    --paper:#f7f6f1;
+    --line:#d8d5c9;
+    --panel:#ffffff;
+    --accent:#3f6b3f;
+    --accent-soft:#e7ede4;
+    --danger:#a6432f;
+    --danger-soft:#f3e4de;
+    --muted:#7a7768;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'Consolas','SFMono-Regular',Menlo,monospace; font-variant-numeric:tabular-nums; }
+
+  /* ── LOGIN ───────────────────────────── */
+  #login-screen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    width:100%;
+    max-width:360px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:36px 32px;
+  }
+  .login-card .label-tag{
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .login-card h1{
+    font-size:22px;
+    margin:0 0 4px;
+    letter-spacing:-.01em;
+  }
+  .login-card p{
+    color:var(--muted);
+    font-size:13px;
+    margin:0 0 24px;
+    line-height:1.5;
+  }
+  .login-card input{
+    width:100%;
+    padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    font-size:14px;
+    margin-bottom:14px;
+  }
+  .login-card input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .btn{
+    width:100%;
+    padding:12px 14px;
+    border:none;
+    background:var(--ink);
+    color:var(--paper);
+    font-size:13px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .btn:hover{ background:var(--accent); }
+  .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  #login-error{
+    color:var(--danger);
+    font-size:13px;
+    margin-top:12px;
+    min-height:18px;
+  }
+
+  /* ── APP SHELL ───────────────────────── */
+  #app-screen{ display:none; min-height:100vh; }
+  header.topbar{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:22px 28px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+  }
+  header.topbar .brand .label-tag{
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  }
+  header.topbar h1{ margin:2px 0 0; font-size:19px; letter-spacing:-.01em; }
+  #logout-btn{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    padding:8px 14px; font-size:12px; cursor:pointer; letter-spacing:.03em;
+  }
+  #logout-btn:hover{ border-color:var(--danger); color:var(--danger); }
+
+  main{ max-width:1080px; margin:0 auto; padding:28px; }
+
+  .toolbar{
+    display:flex; gap:12px; align-items:center; margin-bottom:18px; flex-wrap:wrap;
+  }
+  #search-input{
+    flex:1; min-width:200px; padding:10px 14px; border:1px solid var(--line);
+    background:var(--panel); font-size:14px;
+  }
+  #search-input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  #add-btn{
+    background:var(--accent); color:#fff; border:none; padding:10px 18px;
+    font-size:13px; letter-spacing:.03em; cursor:pointer; white-space:nowrap;
+  }
+  #add-btn:hover{ opacity:.9; }
+
+  .table-wrap{
+    background:var(--panel); border:1px solid var(--line); overflow-x:auto;
+  }
+  table{ width:100%; border-collapse:collapse; font-size:13px; min-width:760px; }
+  thead th{
+    text-align:left; padding:12px 14px; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  thead th.num, td.num{ text-align:right; }
+  tbody td{ padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:var(--accent-soft); }
+  .food-thumb{
+    width:34px; height:34px; object-fit:cover; border:1px solid var(--line); background:var(--paper);
+    vertical-align:middle;
+  }
+  .name-cell{ font-weight:600; }
+  .row-actions{ white-space:nowrap; text-align:right; }
+  .row-actions button{
+    border:none; background:none; cursor:pointer; font-size:12px;
+    padding:5px 9px; letter-spacing:.02em;
+  }
+  .edit-link{ color:var(--accent); }
+  .edit-link:hover{ text-decoration:underline; }
+  .del-link{ color:var(--danger); }
+  .del-link:hover{ text-decoration:underline; }
+
+  #empty-state, #loading-state{
+    padding:48px 20px; text-align:center; color:var(--muted); font-size:13px;
+  }
+
+  .pagination{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:14px; font-size:12px; color:var(--muted);
+  }
+  .pagination button{
+    border:1px solid var(--line); background:var(--panel); padding:7px 12px;
+    cursor:pointer; font-size:12px;
+  }
+  .pagination button:disabled{ opacity:.4; cursor:not-allowed; }
+
+  /* ── MODAL ───────────────────────────── */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(28,31,26,.5);
+    align-items:flex-start; justify-content:center; padding:40px 20px; overflow-y:auto; z-index:10;
+  }
+  .modal{
+    background:var(--panel); width:100%; max-width:480px; border:1px solid var(--line);
+  }
+  .modal-header{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:20px 24px; border-bottom:1px solid var(--line);
+  }
+  .modal-header h2{ margin:0; font-size:16px; }
+  .modal-close{ background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); line-height:1; }
+  .modal-body{ padding:22px 24px; }
+  .field{ margin-bottom:16px; }
+  .field label{
+    display:block; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  .field input[type=text], .field input[type=number]{
+    width:100%; padding:10px 12px; border:1px solid var(--line); background:var(--paper); font-size:14px;
+  }
+  .field input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .field select{
+    width:100%; padding:10px 12px; border:1px solid var(--line); background:var(--paper); font-size:14px;
+  }
+  .field select:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .field small{ color:var(--muted); font-size:11px; }
+  .nama-status{ font-size:12px; margin-top:6px; min-height:16px; }
+  .nama-status.checking{ color:var(--muted); }
+  .nama-status.ok{ color:#1a7f37; }
+  .nama-status.taken{ color:#c0392b; }
+  .modal-footer{
+    display:flex; justify-content:flex-end; gap:10px; padding:18px 24px;
+    border-top:1px solid var(--line);
+  }
+  .btn-secondary{
+    background:none; border:1px solid var(--line); color:var(--ink); padding:10px 16px;
+    font-size:13px; cursor:pointer;
+  }
+  .btn-primary{
+    background:var(--accent); color:#fff; border:none; padding:10px 18px; font-size:13px; cursor:pointer;
+  }
+  #form-error{ color:var(--danger); font-size:13px; margin-top:4px; min-height:16px; }
+
+  .confirm-body{ padding:22px 24px; font-size:14px; line-height:1.5; }
+  .confirm-body b{ font-weight:600; }
+  .btn-danger{ background:var(--danger); color:#fff; border:none; padding:10px 18px; font-size:13px; cursor:pointer; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:var(--paper); padding:12px 20px; font-size:13px;
+    display:none; z-index:20;
+  }
+  .toast.error{ background:var(--danger); }
+
+  /* ── TABS (Makanan / User) ───────────── */
+  .tab-bar{ display:flex; gap:24px; margin-bottom:18px; border-bottom:1px solid var(--line); }
+  .tab-btn{
+    background:none; border:none; padding:0 0 10px; font-size:13px;
+    color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;
+    letter-spacing:.02em; margin-bottom:-1px;
+  }
+  .tab-btn.active{ color:var(--ink); border-bottom-color:var(--accent); font-weight:600; }
+  .tab-btn:hover{ color:var(--ink); }
+
+  /* ── STATUS BADGE (user aktif/dihapus) ── */
+  .status-badge{ display:inline-block; font-size:11px; padding:3px 9px; letter-spacing:.03em; white-space:nowrap; }
+  .status-active{ background:var(--accent-soft); color:var(--accent); }
+  .status-deleted{ background:var(--danger-soft); color:var(--danger); }
+  .restore-link{ color:var(--accent); }
+  .restore-link:hover{ text-decoration:underline; }
+</style>
+</head>
+<body>
+
+  <!-- ═══════════════════ LOGIN ═══════════════════ -->
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="label-tag">Nutri — Admin CMS</div>
+      <h1>Database Makanan Master</h1>
+      <p>Masukkan admin key untuk mengelola data makanan master (data global yang dipakai semua user).</p>
+      <input type="password" id="admin-key-input" placeholder="Admin key" autocomplete="off">
+      <button class="btn" id="login-btn">Masuk</button>
+      <div id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ APP ═══════════════════ -->
+  <div id="app-screen">
+    <header class="topbar">
+      <div class="brand">
+        <div class="label-tag">Nutri — Admin CMS</div>
+        <h1 id="page-title">Database Makanan Master</h1>
+      </div>
+      <button id="logout-btn">Keluar</button>
+    </header>
+
+    <main>
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-foods">Makanan Master</button>
+        <button class="tab-btn" id="tab-users">User</button>
+      </div>
+
+      <!-- ═══════════════ VIEW: MAKANAN MASTER ═══════════════ -->
+      <div id="view-foods">
+        <div class="toolbar">
+          <input type="text" id="search-input" placeholder="Cari nama makanan…">
+          <select id="scope-filter" style="padding:10px 12px; border:1px solid var(--line); background:var(--panel); font-size:13px;">
+            <option value="master">Master saja</option>
+            <option value="user">Kiriman User saja</option>
+            <option value="all">Semua</option>
+          </select>
+          <button id="add-btn">+ Tambah Makanan</button>
+        </div>
+
+        <div class="table-wrap">
+          <div id="loading-state">Memuat data…</div>
+          <div id="empty-state" style="display:none;">Belum ada makanan master. Klik "+ Tambah Makanan" untuk mulai.</div>
+          <table id="food-table" style="display:none;">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Nama Makanan</th>
+                <th class="num">Kalori</th>
+                <th class="num">Protein</th>
+                <th class="num">Karbo</th>
+                <th class="num">Lemak</th>
+                <th class="num">Serat</th>
+                <th class="num">g/Porsi</th>
+                <th>Sumber</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="food-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <span id="page-info">—</span>
+          <div>
+            <button id="prev-btn">‹ Sebelumnya</button>
+            <button id="next-btn">Berikutnya ›</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ VIEW: USER ═══════════════ -->
+      <div id="view-users" style="display:none;">
+        <div class="toolbar">
+          <input type="text" id="search-input-user" placeholder="Cari username…">
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); white-space:nowrap;">
+            <input type="checkbox" id="show-deleted-check" style="width:auto; margin:0;"> Tampilkan yang dihapus
+          </label>
+          <button id="add-btn-user">+ Tambah User</button>
+        </div>
+
+        <div class="table-wrap">
+          <div id="loading-state-user">Memuat data…</div>
+          <div id="empty-state-user" style="display:none;">Belum ada user. Klik "+ Tambah User" untuk mulai.</div>
+          <table id="user-table" style="display:none;">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th class="num">Umur</th>
+                <th class="num">TB (cm)</th>
+                <th class="num">BB (kg)</th>
+                <th>Gender</th>
+                <th>Tujuan</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="user-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <span id="page-info-user">—</span>
+          <div>
+            <button id="prev-btn-user">‹ Sebelumnya</button>
+            <button id="next-btn-user">Berikutnya ›</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ═══════════════════ MODAL: TAMBAH/EDIT ═══════════════════ -->
+  <div class="modal-overlay" id="food-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Tambah Makanan</h2>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="food-id">
+        <div class="field">
+          <label for="f-nama">Nama Makanan</label>
+          <input type="text" id="f-nama" placeholder="mis. Nasi Putih" autocapitalize="words">
+          <div id="f-nama-status" class="nama-status"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-kalori">Kalori (kkal)</label>
+            <input type="number" id="f-kalori" min="0">
+          </div>
+          <div class="field">
+            <label for="f-protein">Protein (g)</label>
+            <input type="number" id="f-protein" min="0" step="0.1">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-karbo">Karbohidrat (g)</label>
+            <input type="number" id="f-karbo" min="0" step="0.1">
+          </div>
+          <div class="field">
+            <label for="f-lemak">Lemak (g)</label>
+            <input type="number" id="f-lemak" min="0" step="0.1">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-serat">Serat (g)</label>
+            <input type="number" id="f-serat" min="0" step="0.1">
+          </div>
+          <div class="field">
+            <label for="f-gram">Gram / Porsi</label>
+            <input type="number" id="f-gram" min="0">
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-image">Foto (opsional)</label>
+          <input type="file" id="f-image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp">
+          <small>Format: png, jpg, jpeg, gif, webp.</small>
+        </div>
+        <div id="form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="modal-cancel">Batal</button>
+        <button class="btn-primary" id="modal-save">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: KONFIRMASI HAPUS ═══════════════════ -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Hapus Makanan</h2>
+        <button class="modal-close" id="confirm-close">&times;</button>
+      </div>
+      <div class="confirm-body">
+        Yakin ingin menghapus <b id="confirm-food-name"></b> dari database master?
+        Data yang sudah dipakai di riwayat makan user tidak akan berubah, tapi makanan
+        ini tidak akan bisa dipilih lagi untuk log makan baru.
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="confirm-cancel">Batal</button>
+        <button class="btn-danger" id="confirm-delete">Hapus</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: TAMBAH/EDIT USER ═══════════════════ -->
+  <div class="modal-overlay" id="user-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="user-modal-title">Tambah User</h2>
+        <button class="modal-close" id="user-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="user-id">
+        <div class="field">
+          <label for="u-username">Username</label>
+          <input type="text" id="u-username" placeholder="mis. budi_santoso" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="u-password" id="u-password-label">Password</label>
+          <input type="password" id="u-password" placeholder="Minimal 8 karakter, ada huruf & angka" autocomplete="new-password">
+          <small id="u-password-hint"></small>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="u-umur">Umur (tahun)</label>
+            <input type="number" id="u-umur" min="10" max="100">
+          </div>
+          <div class="field">
+            <label for="u-gender">Gender</label>
+            <select id="u-gender">
+              <option value="laki_laki">Laki-laki</option>
+              <option value="perempuan">Perempuan</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="u-tb">Tinggi Badan (cm)</label>
+            <input type="number" id="u-tb" min="100" max="250">
+          </div>
+          <div class="field">
+            <label for="u-bb">Berat Badan (kg)</label>
+            <input type="number" id="u-bb" min="30" max="300" step="0.1">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="u-tujuan">Tujuan</label>
+            <select id="u-tujuan">
+              <option value="bulking">Bulking</option>
+              <option value="cutting">Cutting</option>
+              <option value="maintain">Maintain</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="u-aktivitas">Tingkat Aktivitas</label>
+            <select id="u-aktivitas">
+              <option value="sangat_tidak_aktif">Sangat Tidak Aktif</option>
+              <option value="aktivitas_ringan">Aktivitas Ringan</option>
+              <option value="aktivitas_sedang">Aktivitas Sedang</option>
+              <option value="aktivitas_berat">Aktivitas Berat</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="u-tipe-tubuh">Tipe Tubuh</label>
+          <select id="u-tipe-tubuh">
+            <option value="ectomorph">Ectomorph</option>
+            <option value="mesomorph">Mesomorph</option>
+            <option value="endomorph">Endomorph</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="u-target-bb">Target BB (kg) <small>— opsional</small></label>
+            <input type="number" id="u-target-bb" min="30" max="300" step="0.1">
+          </div>
+          <div class="field">
+            <label for="u-bb-awal">BB Awal (kg) <small>— opsional</small></label>
+            <input type="number" id="u-bb-awal" min="30" max="300" step="0.1">
+          </div>
+        </div>
+        <div id="user-form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="user-modal-cancel">Batal</button>
+        <button class="btn-primary" id="user-modal-save">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: KONFIRMASI HAPUS USER ═══════════════════ -->
+  <div class="modal-overlay" id="confirm-user-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Hapus User</h2>
+        <button class="modal-close" id="confirm-user-close">&times;</button>
+      </div>
+      <div class="confirm-body">
+        Yakin ingin menghapus user <b id="confirm-user-name"></b>?
+        Akun ini tidak akan bisa login lagi, tapi data & riwayatnya tetap
+        tersimpan dan bisa dipulihkan kapan saja lewat opsi "Tampilkan yang dihapus".
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="confirm-user-cancel">Batal</button>
+        <button class="btn-danger" id="confirm-user-delete">Hapus</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  var state = { page: 1, limit: 20, q: '', scope: 'master', totalPages: 1, deleteTargetId: null, namaTaken: false };
+  var namaCheckTimer = null;
+  var namaCheckSeq = 0;
+
+  // Tab "User" pakai state terpisah (uState) supaya paging/pencarian/hapus
+  // di tab Makanan dan tab User tidak saling menimpa satu sama lain.
+  var uState = { page: 1, limit: 20, q: '', showDeleted: false, totalPages: 1, deleteTargetId: null, deleteTargetName: '' };
+
+  // ── HELPERS ──────────────────────────────
+  function getKey(){ return sessionStorage.getItem('admin_key') || ''; }
+  function setKey(k){ sessionStorage.setItem('admin_key', k); }
+  function clearKey(){ sessionStorage.removeItem('admin_key'); }
+
+  function showToast(msg, isError){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (isError ? ' error' : '');
+    t.style.display = 'block';
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(function(){ t.style.display = 'none'; }, 3200);
+  }
+
+  function apiFetch(url, options){
+    options = options || {};
+    options.headers = options.headers || {};
+    options.headers['X-Admin-Key'] = getKey();
+    return fetch(url, options).then(function(res){
+      if (res.status === 401){
+        clearKey();
+        showLogin('Sesi admin berakhir, silakan masuk lagi.');
+        throw new Error('unauthorized');
+      }
+      return res.json().then(function(body){
+        if (!res.ok) throw new Error(body.error || 'Terjadi kesalahan');
+        return body;
+      });
+    });
+  }
+
+  // ── LOGIN ────────────────────────────────
+  function showLogin(errMsg){
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-error').textContent = errMsg || '';
+    document.getElementById('admin-key-input').value = '';
+    document.getElementById('admin-key-input').focus();
+  }
+
+  function showApp(){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'block';
+    switchTab('foods');
+  }
+
+  // ── TAB SWITCHING (Makanan Master / User) ─
+  function switchTab(tab){
+    var isFoods = tab === 'foods';
+    document.getElementById('tab-foods').classList.toggle('active', isFoods);
+    document.getElementById('tab-users').classList.toggle('active', !isFoods);
+    document.getElementById('view-foods').style.display = isFoods ? 'block' : 'none';
+    document.getElementById('view-users').style.display = isFoods ? 'none' : 'block';
+    document.getElementById('page-title').textContent = isFoods ? 'Database Makanan Master' : 'Manajemen User';
+    if (isFoods) loadFoods(); else loadUsers();
+  }
+  document.getElementById('tab-foods').addEventListener('click', function(){ switchTab('foods'); });
+  document.getElementById('tab-users').addEventListener('click', function(){ switchTab('users'); });
+
+  function attemptLogin(){
+    var key = document.getElementById('admin-key-input').value;
+    if (!key){ document.getElementById('login-error').textContent = 'Admin key wajib diisi'; return; }
+    document.getElementById('login-error').textContent = '';
+    fetch('/api/admin/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key: key})
+    }).then(function(res){ return res.json().then(function(body){ return {status: res.status, body: body}; }); })
+      .then(function(r){
+        if (r.status !== 200){
+          document.getElementById('login-error').textContent = r.body.error || 'Login gagal';
+          return;
+        }
+        setKey(key);
+        showApp();
+      })
+      .catch(function(){ document.getElementById('login-error').textContent = 'Tidak bisa terhubung ke server'; });
+  }
+
+  document.getElementById('login-btn').addEventListener('click', attemptLogin);
+  document.getElementById('admin-key-input').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') attemptLogin();
+  });
+  document.getElementById('logout-btn').addEventListener('click', function(){
+    clearKey();
+    showLogin();
+  });
+
+  // ── LIST + SEARCH + PAGINATION ───────────
+  var searchTimer = null;
+  document.getElementById('search-input').addEventListener('input', function(e){
+    clearTimeout(searchTimer);
+    var val = e.target.value;
+    searchTimer = setTimeout(function(){
+      state.q = val.trim();
+      state.page = 1;
+      loadFoods();
+    }, 350);
+  });
+
+  document.getElementById('prev-btn').addEventListener('click', function(){
+    if (state.page > 1){ state.page--; loadFoods(); }
+  });
+  document.getElementById('next-btn').addEventListener('click', function(){
+    if (state.page < state.totalPages){ state.page++; loadFoods(); }
+  });
+
+  document.getElementById('scope-filter').addEventListener('change', function(e){
+    state.scope = e.target.value;
+    state.page = 1;
+    loadFoods();
+  });
+
+  function escapeHtml(s){
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  // Ubah setiap huruf awal kata jadi kapital, sisanya kecil.
+  // Contoh: "nasi PUTIH goreng" -> "Nasi Putih Goreng"
+  function toTitleCase(s){
+    return String(s || '')
+      .toLowerCase()
+      .replace(/(^|\s)\S/g, function(c){ return c.toUpperCase(); });
+  }
+
+  // Cek ke server apakah nama makanan ini sudah dipakai sebagai makanan
+  // master lain (kecuali makanan yang sedang diedit). Di-debounce 400ms
+  // supaya tidak spam request tiap ketukan tombol.
+  function scheduleNamaCheck(){
+    clearTimeout(namaCheckTimer);
+    var statusEl = document.getElementById('f-nama-status');
+    var nama = document.getElementById('f-nama').value.trim();
+    var currentId = document.getElementById('food-id').value;
+
+    if (!nama){
+      statusEl.textContent = '';
+      statusEl.className = 'nama-status';
+      state.namaTaken = false;
+      return;
+    }
+
+    statusEl.textContent = 'Mengecek ketersediaan nama...';
+    statusEl.className = 'nama-status checking';
+
+    namaCheckTimer = setTimeout(function(){
+      var seq = ++namaCheckSeq; // biar hasil balasan lama tidak menimpa yang baru
+      apiFetch('/api/admin/foods?scope=master&q=' + encodeURIComponent(nama) + '&limit=100')
+        .then(function(res){
+          if (seq !== namaCheckSeq) return; // sudah kadaluarsa, abaikan
+          var taken = (res.data || []).some(function(f){
+            return f.nama_makanan.trim().toLowerCase() === nama.toLowerCase() &&
+                   String(f.id) !== String(currentId);
+          });
+          state.namaTaken = taken;
+          if (taken){
+            statusEl.textContent = '✗ Nama sudah dipakai, silakan pakai nama lain';
+            statusEl.className = 'nama-status taken';
+          } else {
+            statusEl.textContent = '✓ Nama tersedia';
+            statusEl.className = 'nama-status ok';
+          }
+        })
+        .catch(function(){
+          if (seq !== namaCheckSeq) return;
+          statusEl.textContent = '';
+          statusEl.className = 'nama-status';
+        });
+    }, 400);
+  }
+
+  function loadFoods(){
+    document.getElementById('loading-state').style.display = 'block';
+    document.getElementById('food-table').style.display = 'none';
+    document.getElementById('empty-state').style.display = 'none';
+
+    var params = new URLSearchParams({ page: state.page, limit: state.limit, q: state.q, scope: state.scope });
+    apiFetch('/api/admin/foods?' + params.toString())
+      .then(function(body){
+        state.totalPages = body.total_pages || 1;
+        renderTable(body.data || []);
+        document.getElementById('page-info').textContent =
+          'Halaman ' + body.page + ' dari ' + Math.max(body.total_pages, 1) + ' — total ' + body.total + ' makanan';
+        document.getElementById('prev-btn').disabled = state.page <= 1;
+        document.getElementById('next-btn').disabled = state.page >= state.totalPages;
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') showToast(err.message, true);
+      })
+      .finally(function(){
+        document.getElementById('loading-state').style.display = 'none';
+      });
+  }
+
+  function renderTable(foods){
+    var tbody = document.getElementById('food-tbody');
+    tbody.innerHTML = '';
+    if (!foods.length){
+      document.getElementById('empty-state').style.display = 'block';
+      document.getElementById('food-table').style.display = 'none';
+      return;
+    }
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('food-table').style.display = 'table';
+
+    foods.forEach(function(f){
+      var isMaster = !f.user_id;
+      var sourceLabel = isMaster
+        ? '<span class="status-badge status-active">Master</span>'
+        : escapeHtml(f.owner_username ? '@' + f.owner_username : ('User #' + f.user_id));
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (f.image ? '<img class="food-thumb" src="' + escapeHtml(f.image) + '" alt="">' : '') + '</td>' +
+        '<td class="name-cell">' + escapeHtml(f.nama_makanan) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.kalori) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.protein) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.karbo) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.lemak) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.serat) + '</td>' +
+        '<td class="num mono">' + escapeHtml(f.gram_per_porsi) + '</td>' +
+        '<td>' + sourceLabel + '</td>' +
+        '<td class="row-actions">' +
+          (isMaster
+            ? '<button class="edit-link" data-id="' + f.id + '">Edit</button>' +
+              '<button class="del-link" data-id="' + f.id + '" data-name="' + escapeHtml(f.nama_makanan) + '">Hapus</button>'
+            : '<small style="color:var(--muted);">Milik user</small>'
+          ) +
+        '</td>';
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.edit-link').forEach(function(btn){
+      btn.addEventListener('click', function(){ openEditModal(foods.find(function(f){ return String(f.id) === btn.dataset.id; })); });
+    });
+    tbody.querySelectorAll('.del-link').forEach(function(btn){
+      btn.addEventListener('click', function(){ openConfirmModal(btn.dataset.id, btn.dataset.name); });
+    });
+  }
+
+  // ── MODAL TAMBAH/EDIT ────────────────────
+  var foodModal = document.getElementById('food-modal');
+
+  function openAddModal(){
+    document.getElementById('modal-title').textContent = 'Tambah Makanan';
+    document.getElementById('food-id').value = '';
+    ['f-nama','f-kalori','f-protein','f-karbo','f-lemak','f-serat','f-gram'].forEach(function(id){
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('f-image').value = '';
+    document.getElementById('form-error').textContent = '';
+    document.getElementById('f-nama-status').textContent = '';
+    document.getElementById('f-nama-status').className = 'nama-status';
+    state.namaTaken = false;
+    foodModal.style.display = 'flex';
+    document.getElementById('f-nama').focus();
+  }
+
+  function openEditModal(food){
+    if (!food) return;
+    document.getElementById('modal-title').textContent = 'Edit Makanan';
+    document.getElementById('food-id').value = food.id;
+    document.getElementById('f-nama').value = food.nama_makanan;
+    document.getElementById('f-kalori').value = food.kalori;
+    document.getElementById('f-protein').value = food.protein;
+    document.getElementById('f-karbo').value = food.karbo;
+    document.getElementById('f-lemak').value = food.lemak;
+    document.getElementById('f-serat').value = food.serat;
+    document.getElementById('f-gram').value = food.gram_per_porsi;
+    document.getElementById('f-image').value = '';
+    document.getElementById('form-error').textContent = '';
+    document.getElementById('f-nama-status').textContent = '';
+    document.getElementById('f-nama-status').className = 'nama-status';
+    state.namaTaken = false;
+    foodModal.style.display = 'flex';
+    document.getElementById('f-nama').focus();
+  }
+
+  function closeFoodModal(){ foodModal.style.display = 'none'; }
+
+  document.getElementById('add-btn').addEventListener('click', openAddModal);
+  document.getElementById('modal-close').addEventListener('click', closeFoodModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeFoodModal);
+  foodModal.addEventListener('click', function(e){ if (e.target === foodModal) closeFoodModal(); });
+
+  // Rapikan huruf kapital begitu user selesai mengetik (pindah dari kolom ini),
+  // bukan tiap ketukan tombol, supaya kursor tidak loncat-loncat saat mengetik.
+  document.getElementById('f-nama').addEventListener('blur', function(){
+    this.value = toTitleCase(this.value.trim());
+  });
+
+  // Cek ketersediaan nama tiap kali user mengetik (di-debounce di dalam fungsinya).
+  document.getElementById('f-nama').addEventListener('input', scheduleNamaCheck);
+
+  document.getElementById('modal-save').addEventListener('click', function(){
+    var id = document.getElementById('food-id').value;
+    var nama = toTitleCase(document.getElementById('f-nama').value.trim());
+    if (!nama){ document.getElementById('form-error').textContent = 'Nama makanan wajib diisi'; return; }
+    if (state.namaTaken){ document.getElementById('form-error').textContent = 'Nama makanan sudah dipakai, tidak bisa disimpan'; return; }
+
+    var fd = new FormData();
+    fd.append('nama_makanan', nama);
+    fd.append('kalori', document.getElementById('f-kalori').value || 0);
+    fd.append('protein', document.getElementById('f-protein').value || 0);
+    fd.append('karbo', document.getElementById('f-karbo').value || 0);
+    fd.append('lemak', document.getElementById('f-lemak').value || 0);
+    fd.append('serat', document.getElementById('f-serat').value || 0);
+    fd.append('gram_per_porsi', document.getElementById('f-gram').value || 100);
+    var imgFile = document.getElementById('f-image').files[0];
+    if (imgFile) fd.append('food_image', imgFile);
+
+    var url = id ? '/api/admin/foods/' + id : '/api/admin/foods';
+    var method = id ? 'PUT' : 'POST';
+
+    document.getElementById('modal-save').disabled = true;
+    apiFetch(url, { method: method, body: fd })
+      .then(function(){
+        closeFoodModal();
+        showToast(id ? 'Makanan berhasil diperbarui' : 'Makanan berhasil ditambahkan');
+        loadFoods();
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') document.getElementById('form-error').textContent = err.message;
+      })
+      .finally(function(){ document.getElementById('modal-save').disabled = false; });
+  });
+
+  // ── MODAL HAPUS ───────────────────────────
+  var confirmModal = document.getElementById('confirm-modal');
+
+  function openConfirmModal(id, name){
+    state.deleteTargetId = id;
+    document.getElementById('confirm-food-name').textContent = name;
+    confirmModal.style.display = 'flex';
+  }
+  function closeConfirmModal(){ confirmModal.style.display = 'none'; state.deleteTargetId = null; }
+
+  document.getElementById('confirm-close').addEventListener('click', closeConfirmModal);
+  document.getElementById('confirm-cancel').addEventListener('click', closeConfirmModal);
+  confirmModal.addEventListener('click', function(e){ if (e.target === confirmModal) closeConfirmModal(); });
+
+  document.getElementById('confirm-delete').addEventListener('click', function(){
+    if (!state.deleteTargetId) return;
+    apiFetch('/api/admin/foods/' + state.deleteTargetId, { method: 'DELETE' })
+      .then(function(){
+        showToast('Makanan berhasil dihapus');
+        closeConfirmModal();
+        loadFoods();
+      })
+      .catch(function(err){ 
+        if (err.message !== 'unauthorized') showToast(err.message, true);
+        closeConfirmModal();
+      });
+  });
+
+  // ── USER: LIST + SEARCH + PAGINATION ──────
+  var userSearchTimer = null;
+  document.getElementById('search-input-user').addEventListener('input', function(e){
+    clearTimeout(userSearchTimer);
+    var val = e.target.value;
+    userSearchTimer = setTimeout(function(){
+      uState.q = val.trim();
+      uState.page = 1;
+      loadUsers();
+    }, 350);
+  });
+
+  document.getElementById('show-deleted-check').addEventListener('change', function(e){
+    uState.showDeleted = e.target.checked;
+    uState.page = 1;
+    loadUsers();
+  });
+
+  document.getElementById('prev-btn-user').addEventListener('click', function(){
+    if (uState.page > 1){ uState.page--; loadUsers(); }
+  });
+  document.getElementById('next-btn-user').addEventListener('click', function(){
+    if (uState.page < uState.totalPages){ uState.page++; loadUsers(); }
+  });
+
+  var enumLabels = {
+    bulking: 'Bulking', cutting: 'Cutting', maintain: 'Maintain',
+    laki_laki: 'Laki-laki', perempuan: 'Perempuan',
+  };
+
+  function loadUsers(){
+    document.getElementById('loading-state-user').style.display = 'block';
+    document.getElementById('user-table').style.display = 'none';
+    document.getElementById('empty-state-user').style.display = 'none';
+
+    var params = new URLSearchParams({
+      page: uState.page, limit: uState.limit, q: uState.q,
+      show_deleted: uState.showDeleted ? 'true' : 'false',
+    });
+    apiFetch('/api/admin/users?' + params.toString())
+      .then(function(body){
+        uState.totalPages = body.total_pages || 1;
+        renderUserTable(body.data || []);
+        document.getElementById('page-info-user').textContent =
+          'Halaman ' + body.page + ' dari ' + Math.max(body.total_pages, 1) + ' — total ' + body.total + ' user';
+        document.getElementById('prev-btn-user').disabled = uState.page <= 1;
+        document.getElementById('next-btn-user').disabled = uState.page >= uState.totalPages;
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') showToast(err.message, true);
+      })
+      .finally(function(){
+        document.getElementById('loading-state-user').style.display = 'none';
+      });
+  }
+
+  function renderUserTable(users){
+    var tbody = document.getElementById('user-tbody');
+    tbody.innerHTML = '';
+    if (!users.length){
+      document.getElementById('empty-state-user').style.display = 'block';
+      document.getElementById('user-table').style.display = 'none';
+      return;
+    }
+    document.getElementById('empty-state-user').style.display = 'none';
+    document.getElementById('user-table').style.display = 'table';
+
+    users.forEach(function(u){
+      var isDeleted = !!u.deleted_at;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="name-cell">' + escapeHtml(u.username) + '</td>' +
+        '<td class="num mono">' + escapeHtml(u.umur) + '</td>' +
+        '<td class="num mono">' + escapeHtml(u.tb) + '</td>' +
+        '<td class="num mono">' + escapeHtml(u.bb) + '</td>' +
+        '<td>' + escapeHtml(enumLabels[u.gender] || u.gender) + '</td>' +
+        '<td>' + escapeHtml(enumLabels[u.tujuan] || u.tujuan) + '</td>' +
+        '<td><span class="status-badge ' + (isDeleted ? 'status-deleted' : 'status-active') + '">' +
+          (isDeleted ? 'Dihapus' : 'Aktif') + '</span></td>' +
+        '<td class="row-actions">' +
+          (isDeleted
+            ? '<button class="restore-link" data-id="' + u.id + '">Pulihkan</button>'
+            : '<button class="edit-link" data-id="' + u.id + '">Edit</button>' +
+              '<button class="del-link" data-id="' + u.id + '" data-name="' + escapeHtml(u.username) + '">Hapus</button>'
+          ) +
+        '</td>';
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.edit-link').forEach(function(btn){
+      btn.addEventListener('click', function(){ openEditUserModal(users.find(function(u){ return String(u.id) === btn.dataset.id; })); });
+    });
+    tbody.querySelectorAll('.del-link').forEach(function(btn){
+      btn.addEventListener('click', function(){ openConfirmUserModal(btn.dataset.id, btn.dataset.name); });
+    });
+    tbody.querySelectorAll('.restore-link').forEach(function(btn){
+      btn.addEventListener('click', function(){ restoreUser(btn.dataset.id); });
+    });
+  }
+
+  // ── USER: MODAL TAMBAH/EDIT ───────────────
+  var userModal = document.getElementById('user-modal');
+
+  function openAddUserModal(){
+    document.getElementById('user-modal-title').textContent = 'Tambah User';
+    document.getElementById('user-id').value = '';
+    ['u-username','u-umur','u-tb','u-bb','u-target-bb','u-bb-awal'].forEach(function(id){
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-gender').value = 'laki_laki';
+    document.getElementById('u-tujuan').value = 'maintain';
+    document.getElementById('u-aktivitas').value = 'aktivitas_ringan';
+    document.getElementById('u-tipe-tubuh').value = 'mesomorph';
+    document.getElementById('u-password-label').textContent = 'Password';
+    document.getElementById('u-password-hint').textContent = 'Minimal 8 karakter, harus ada huruf dan angka.';
+    document.getElementById('user-form-error').textContent = '';
+    userModal.style.display = 'flex';
+    document.getElementById('u-username').focus();
+  }
+
+  function openEditUserModal(user){
+    if (!user) return;
+    document.getElementById('user-modal-title').textContent = 'Edit User';
+    document.getElementById('user-id').value = user.id;
+    document.getElementById('u-username').value = user.username;
+    document.getElementById('u-umur').value = user.umur;
+    document.getElementById('u-tb').value = user.tb;
+    document.getElementById('u-bb').value = user.bb;
+    document.getElementById('u-gender').value = user.gender;
+    document.getElementById('u-tujuan').value = user.tujuan;
+    document.getElementById('u-aktivitas').value = user.aktivitas;
+    document.getElementById('u-tipe-tubuh').value = user.tipe_tubuh;
+    document.getElementById('u-target-bb').value = user.target_bb || '';
+    document.getElementById('u-bb-awal').value = user.bb_awal || '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-password-label').textContent = 'Password Baru';
+    document.getElementById('u-password-hint').textContent = 'Kosongkan kalau tidak mau mengubah password user ini.';
+    document.getElementById('user-form-error').textContent = '';
+    userModal.style.display = 'flex';
+    document.getElementById('u-username').focus();
+  }
+
+  function closeUserModal(){ userModal.style.display = 'none'; }
+
+  document.getElementById('add-btn-user').addEventListener('click', openAddUserModal);
+  document.getElementById('user-modal-close').addEventListener('click', closeUserModal);
+  document.getElementById('user-modal-cancel').addEventListener('click', closeUserModal);
+  userModal.addEventListener('click', function(e){ if (e.target === userModal) closeUserModal(); });
+
+  document.getElementById('user-modal-save').addEventListener('click', function(){
+    var id       = document.getElementById('user-id').value;
+    var username = document.getElementById('u-username').value.trim();
+    var password = document.getElementById('u-password').value;
+    var errEl    = document.getElementById('user-form-error');
+
+    if (!username){ errEl.textContent = 'Username wajib diisi'; return; }
+    if (!id && !password){ errEl.textContent = 'Password wajib diisi untuk user baru'; return; }
+
+    var umur = document.getElementById('u-umur').value;
+    var tb   = document.getElementById('u-tb').value;
+    var bb   = document.getElementById('u-bb').value;
+    if (!umur || !tb || !bb){ errEl.textContent = 'Umur, tinggi badan, dan berat badan wajib diisi'; return; }
+
+    var payload = {
+      username:   username,
+      umur:       umur,
+      tb:         tb,
+      bb:         bb,
+      gender:     document.getElementById('u-gender').value,
+      tujuan:     document.getElementById('u-tujuan').value,
+      aktivitas:  document.getElementById('u-aktivitas').value,
+      tipe_tubuh: document.getElementById('u-tipe-tubuh').value,
+    };
+    // Endpoint create (POST) pakai key 'body_type', endpoint update (PUT)
+    // pakai key 'tipe_tubuh' — konsisten dengan /api/register vs /api/profile
+    // di routes.py. Set dua-duanya di sini biar payload sama valid untuk POST/PUT.
+    payload.body_type = payload.tipe_tubuh;
+
+    var targetBb = document.getElementById('u-target-bb').value;
+    var bbAwal   = document.getElementById('u-bb-awal').value;
+    if (targetBb) payload.target_bb = targetBb;
+    if (bbAwal)   payload.bb_awal   = bbAwal;
+    if (password) payload.password = password;
+
+    var url    = id ? '/api/admin/users/' + id : '/api/admin/users';
+    var method = id ? 'PUT' : 'POST';
+
+    document.getElementById('user-modal-save').disabled = true;
+    apiFetch(url, {
+      method:  method,
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    })
+      .then(function(){
+        closeUserModal();
+        showToast(id ? 'User berhasil diperbarui' : 'User berhasil ditambahkan');
+        loadUsers();
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') errEl.textContent = err.message;
+      })
+      .finally(function(){ document.getElementById('user-modal-save').disabled = false; });
+  });
+
+  // ── USER: MODAL HAPUS ─────────────────────
+  var confirmUserModal = document.getElementById('confirm-user-modal');
+
+  function openConfirmUserModal(id, name){
+    uState.deleteTargetId = id;
+    uState.deleteTargetName = name;
+    document.getElementById('confirm-user-name').textContent = name;
+    confirmUserModal.style.display = 'flex';
+  }
+  function closeConfirmUserModal(){ confirmUserModal.style.display = 'none'; uState.deleteTargetId = null; }
+
+  document.getElementById('confirm-user-close').addEventListener('click', closeConfirmUserModal);
+  document.getElementById('confirm-user-cancel').addEventListener('click', closeConfirmUserModal);
+  confirmUserModal.addEventListener('click', function(e){ if (e.target === confirmUserModal) closeConfirmUserModal(); });
+
+  document.getElementById('confirm-user-delete').addEventListener('click', function(){
+    if (!uState.deleteTargetId) return;
+    apiFetch('/api/admin/users/' + uState.deleteTargetId, { method: 'DELETE' })
+      .then(function(){
+        showToast('User berhasil dihapus');
+        closeConfirmUserModal();
+        loadUsers();
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') showToast(err.message, true);
+        closeConfirmUserModal();
+      });
+  });
+
+  // ── USER: PULIHKAN (restore) ──────────────
+  function restoreUser(id){
+    apiFetch('/api/admin/users/' + id + '/restore', { method: 'POST' })
+      .then(function(){
+        showToast('User berhasil dipulihkan');
+        loadUsers();
+      })
+      .catch(function(err){
+        if (err.message !== 'unauthorized') showToast(err.message, true);
+      });
+  }
+
+  // ── INIT ──────────────────────────────────
+  if (getKey()) { showApp(); } else { showLogin(); }
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Colors } from '../../theme';
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Colors } from "../../theme";
 
 export default function PorsiSelector({ value, onChange }) {
   return (
@@ -25,8 +25,28 @@ export default function PorsiSelector({ value, onChange }) {
 }
 
 const styles = StyleSheet.create({
-  porsiRow:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  porsiBtn:     { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.bg, borderWidth: 1.5, borderColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
-  porsiBtnText: { fontSize: 16, color: Colors.text, fontWeight: '700', lineHeight: 18 },
-  porsiVal:     { fontSize: 14, fontWeight: '800', color: Colors.primary, minWidth: 28, textAlign: 'center' },
+  porsiRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  porsiBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.bg,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  porsiBtnText: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  porsiVal: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: Colors.primary,
+    minWidth: 28,
+    textAlign: "center",
+  },
 });
