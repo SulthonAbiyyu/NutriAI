@@ -3,11 +3,13 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const MIN_SPLASH_DURATION = 5000;
+
 import { useAuth } from "../context/AuthContext";
-import { Colors } from "../theme";
 
 import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
@@ -19,6 +21,7 @@ import InputMakananScreen from "../screens/main/InputMakananScreen";
 import LaporanScreen from "../screens/main/LaporanScreen";
 import MealTemplatesScreen from "../screens/main/MealTemplatesScreen";
 import ProfileScreen from "../screens/main/ProfileScreen";
+import SplashScreen from "../screens/main/SplashScreen";
 import StreakScreen from "../screens/main/StreakScreen";
 import TambahDataScreen from "../screens/main/TambahDataScreen";
 import WaterTrackerScreen from "../screens/main/WaterTrackerScreen";
@@ -248,19 +251,17 @@ function MainStack() {
 }
 export default function AppNavigator() {
   const { isLoggedIn, isReady } = useAuth();
-  if (!isReady || isLoggedIn === null) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: Colors.bg,
-        }}
-      >
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinTimeElapsed(true);
+    }, MIN_SPLASH_DURATION);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isReady || isLoggedIn === null || !minTimeElapsed) {
+    return <SplashScreen />;
   }
 
   return isLoggedIn ? <MainStack /> : <AuthStack />;
