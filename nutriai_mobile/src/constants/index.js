@@ -1,4 +1,4 @@
-export const API_TIMEOUT = 15000;
+export const API_TIMEOUT = 60000;
 export const BG_IMAGE = require("../../assets/bg.png");
 export const LOGO = require("../../assets/logo.png");
 
