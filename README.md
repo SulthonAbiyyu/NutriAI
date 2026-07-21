@@ -8,6 +8,11 @@
 
 NutriAI adalah aplikasi mobile untuk tracking nutrisi dan kalori harian, dibangun dengan React Native (Expo) di sisi frontend dan Flask di sisi backend. Aplikasi ini dilengkapi dengan **Jarvis**, asisten AI voice-command (powered by Google Gemini) yang dapat mencatat, menghapus, dan menganalisis asupan makanan hanya lewat perintah suara — serta **AI Chat**, chatbot berbasis teks untuk konsultasi nutrisi personal.
 
+🔗 **Live Backend:** [https://nutriai-37bw.onrender.com](https://nutriai-37bw.onrender.com)
+📲 **Download APK:** lihat halaman [Releases](https://github.com/SulthonAbiyyu/NutriAI/releases/latest)
+
+> ⏱️ Catatan: backend di-host di Render free tier, jadi server akan "tidur" saat tidak ada aktivitas selama beberapa saat. Request pertama setelah idle bisa butuh waktu lebih lama (±30–50 detik) untuk "bangun" kembali.
+
 ---
 
 ## 📖 Latar Belakang
@@ -271,7 +276,7 @@ NutriAI/
     │   ├── ai_routes.py      # Endpoint AI (Jarvis, AI Chat, analisis)
     │   ├── admin_routes.py   # Endpoint & render Admin CMS (CRUD makanan master, CRUD user)
     │   └── templates/admin/  # Halaman Jinja2 Admin CMS
-    ├── app.py                # Entry point Flask
+    ├── main.py                # Entry point Flask (dijalankan via gunicorn di Render)
     └── requirements.txt
 ```
 
