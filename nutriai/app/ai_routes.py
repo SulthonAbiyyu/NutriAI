@@ -1076,13 +1076,14 @@ def ai_confirm_tambah_data():
     file = request.files.get('food_image')
     if file and file.filename:
         from werkzeug.utils import secure_filename
-        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'static/uploads/food')
-        os.makedirs(upload_folder, exist_ok=True)
-        safe_name = secure_filename(file.filename)
-        ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else 'jpg'
-        filename = f'food_{user.id}_{int(time.time())}.{ext}'
-        file.save(os.path.join(upload_folder, filename))
-        image_path = f'{upload_folder}/{filename}'.replace('\\', '/')
+        from app.routes import upload_to_supabase
+        try:
+            image_path = upload_to_supabase(
+                file.read(), secure_filename(file.filename), bucket='foods'
+            ) or ''
+        except Exception as e:
+            print(f'[ConfirmTambahData] Upload foto gagal: {e}')
+            image_path = ''
 
     food_baru = Food(
         user_id        = user.id,   # FIX: sebelumnya tidak diisi (default NULL) —
