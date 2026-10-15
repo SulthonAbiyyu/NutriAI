@@ -609,7 +609,7 @@ BALAS HANYA dalam format JSON ini, TIDAK BOLEH ada teks di luar JSON:
 
 ATURAN TEKNIS:
 - add_food: WAJIB cocokkan nama ke DATABASE MAKANAN. Fuzzy match hanya untuk variasi penulisan atau jenis makanan yang SAMA (misal "nasi putih" cocok "Nasi"). Makanan yang BERBEDA jenis TIDAK BOLEH dicocokkan walau ada kata yang mirip (misal "kentang goreng" BUKAN "ayam goreng" dan BUKAN mie instan). food_id harus persis id dari DATABASE MAKANAN. Tidak ada di DB → not_found, JANGAN masukkan ke items. Isi "nama_diucapkan" dengan nama makanan persis seperti yang disebut user
-- tambah_data: isi new_food dengan estimasi gizi terbaik dari pengetahuanmu. Semua nilai integer. Jika tidak tahu → 0
+- tambah_data: isi new_food dengan estimasi gizi terbaik dari pengetahuanmu. Semua nilai integer. Jika tidak tahu → 0 | SEMUA nilai gizi new_food (kalori, protein, karbo, lemak, serat) WAJIB per 100 gram, bukan per porsi, berapa pun gram_per_porsi. gram_per_porsi = berat 1 porsi yang wajar (atau gram yang disebut user, default 100)
 - Konversi satuan: "centong/piring"=1 porsi nasi | "potong/iris/biji"=1 porsi lauk | "gelas"=250ml | "botol"=600ml | "mangkok/bowl"=1 porsi | "sendok makan"=15g | "sdm"=15g | "sdt"=5g
 - Waktu makan: "pagi/sarapan"→Pagi | "siang/makan siang/lunch"→Siang | "sore/snack sore"→Sore | "malam/dinner/makan malam"→Malam. Jika tidak disebutkan → gunakan {waktu_default}
 - Jika audio tidak jelas/noise → intent "unclear", bukan general
