@@ -407,6 +407,19 @@ def ai_weekly_analysis():
 #  VOICE COMMAND (endpoint terbesar)
 # ─────────────────────────────────────────────────────────
 
+def _nama_cocok(ucapan, nama_db):
+    """True kalau nama yang disebut user memang sama/mirip dengan nama makanan di DB."""
+    import difflib
+    a = re.sub(r'[^a-z0-9 ]', ' ', (ucapan or '').lower()).split()
+    b = re.sub(r'[^a-z0-9 ]', ' ', (nama_db or '').lower()).split()
+    if not a or not b:
+        return True
+    sa, sb = ' '.join(a), ' '.join(b)
+    if sa in sb or sb in sa:
+        return True
+    return difflib.SequenceMatcher(None, sa, sb).ratio() >= 0.75
+
+
 @ai_bp.route('/api/ai/voice-command', methods=['POST'])
 @jwt_required()
 def ai_voice_command():
@@ -489,7 +502,7 @@ Nama: {user.username} | BB: {user.bb}kg | TB: {user.tb}cm | Umur: {user.umur}th 
 Tujuan: {user.tujuan} | Aktivitas: {user.aktivitas} | Tipe tubuh: {user.tipe_tubuh}
 BMR: {int(user.bmr or 0)} kcal | TDEE: {int(user.tdee or 0)} kcal
 Target harian: {target_cal} kcal / {target_prot}g protein
-Waktu sekarang: {now_utc().strftime('%H:%M')} WIB | Tanggal: {today} | Sesi makan: {waktu_default}
+Waktu sekarang: {now_wib.strftime('%H:%M')} WIB | Tanggal: {today} | Sesi makan: {waktu_default}
 
 ━━━ STATUS HARI INI ━━━
 Makanan tercatat: {makanan_hari}
@@ -572,7 +585,7 @@ BALAS HANYA dalam format JSON ini, TIDAK BOLEH ada teks di luar JSON:
   "unclear_reason": "isi hanya jika confidence low — jelaskan bagian mana yang ambigu",
   "answer": "Untuk general/meal_suggestion/analyze_nutrition: jawaban lengkap, informatif, dan personal di sini. Lainnya kosong string.",
   "params": {{
-    "items": [{{"food_id": <id integer dari DB>, "nama_makanan": "...", "porsi": <integer≥1>, "waktu_makan": "Pagi|Siang|Sore|Malam"}}],
+    "items": [{{"food_id": <id integer dari DB>, "nama_makanan": "nama persis di DB", "nama_diucapkan": "nama makanan persis seperti disebut user", "porsi": <integer≥1>, "waktu_makan": "Pagi|Siang|Sore|Malam"}}],
     "not_found": ["nama makanan yg tidak ada di database"],
     "new_food": {{
       "nama_makanan": "...",
@@ -595,7 +608,7 @@ BALAS HANYA dalam format JSON ini, TIDAK BOLEH ada teks di luar JSON:
 }}
 
 ATURAN TEKNIS:
-- add_food: WAJIB cocokkan nama ke DATABASE MAKANAN. Fuzzy match diperbolehkan (misal "nasi putih" cocok "Nasi"). Tidak ada di DB → not_found, JANGAN masukkan ke items
+- add_food: WAJIB cocokkan nama ke DATABASE MAKANAN. Fuzzy match hanya untuk variasi penulisan atau jenis makanan yang SAMA (misal "nasi putih" cocok "Nasi"). Makanan yang BERBEDA jenis TIDAK BOLEH dicocokkan walau ada kata yang mirip (misal "kentang goreng" BUKAN "ayam goreng" dan BUKAN mie instan). food_id harus persis id dari DATABASE MAKANAN. Tidak ada di DB → not_found, JANGAN masukkan ke items. Isi "nama_diucapkan" dengan nama makanan persis seperti yang disebut user
 - tambah_data: isi new_food dengan estimasi gizi terbaik dari pengetahuanmu. Semua nilai integer. Jika tidak tahu → 0
 - Konversi satuan: "centong/piring"=1 porsi nasi | "potong/iris/biji"=1 porsi lauk | "gelas"=250ml | "botol"=600ml | "mangkok/bowl"=1 porsi | "sendok makan"=15g | "sdm"=15g | "sdt"=5g
 - Waktu makan: "pagi/sarapan"→Pagi | "siang/makan siang/lunch"→Siang | "sore/snack sore"→Sore | "malam/dinner/makan malam"→Malam. Jika tidak disebutkan → gunakan {waktu_default}
@@ -628,9 +641,9 @@ ATURAN TEKNIS:
             'contents':           [{'parts': parts}],
             'generationConfig':   {
                 'temperature': 0.4,
-                'maxOutputTokens': 2048,
+                'maxOutputTokens': 4096,
                 'responseMimeType': 'application/json',
-                'thinkingConfig': {'thinkingBudget': 0},
+                'thinkingConfig': {'thinkingBudget': 1024},
             },
         }).encode()
 
@@ -713,8 +726,14 @@ ATURAN TEKNIS:
             for item in items:
                 food_id     = item.get('food_id')
                 food_master = db.session.get(Food, food_id) if food_id else None
+                _spoken     = (item.get('nama_diucapkan') or item.get('nama_makanan') or '').strip()
+                # FIX: tolak food_id dari AI kalau namanya tidak cocok dengan yang disebut user
+                if food_master and _spoken and not _nama_cocok(_spoken, food_master.nama_makanan):
+                    current_app.logger.warning(
+                        f'[VoiceCmd] food_id {food_id} ({food_master.nama_makanan}) DITOLAK, user menyebut: {_spoken}')
+                    food_master = None
                 if not food_master:
-                    name = (item.get('nama_makanan') or '').strip().lower()
+                    name = _spoken.lower()
                     if name:
                         food_master = Food.query.filter(
                             Food.deleted_at.is_(None),
@@ -743,7 +762,7 @@ ATURAN TEKNIS:
                         'waktu': wkt, 'kalori': (food_master.kalori or 0) * porsi, 'protein': (food_master.protein or 0) * porsi,
                     })
                 else:
-                    nama = item.get('nama_makanan', '')
+                    nama = _spoken or item.get('nama_makanan', '')
                     if nama and nama not in not_found:
                         not_found.append(nama)
             if added:
