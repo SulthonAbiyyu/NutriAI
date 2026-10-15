@@ -5,6 +5,7 @@ import {
   Easing,
   Image,
   ImageBackground,
+  PixelRatio,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,11 +24,12 @@ function ShadowOverlay({ opacity = 0.32 }) {
     />
   );
 }
+const px = (v) => PixelRatio.roundToNearestPixel(v);
 const DEPTH_LAYERS = [
-  { dx: 1.5, dy: 2.5, color: "rgba(0,0,0,0.55)" },
-  { dx: 3, dy: 5, color: "rgba(0,0,0,0.40)" },
-  { dx: 5, dy: 7.5, color: "rgba(0,0,0,0.26)" },
-  { dx: 7, dy: 10.5, color: "rgba(0,0,0,0.15)" },
+  { dx: px(1.5), dy: px(2.5), color: "rgba(0,0,0,0.55)" },
+  { dx: px(3), dy: px(5), color: "rgba(0,0,0,0.40)" },
+  { dx: px(5), dy: px(7.5), color: "rgba(0,0,0,0.26)" },
+  { dx: px(7), dy: px(10.5), color: "rgba(0,0,0,0.15)" },
 ];
 
 function DepthStack({ radius = 20 }) {
@@ -90,9 +92,9 @@ function Title3D({
   pillColors = ["#3A2F22", "#1C140C"],
 }) {
   const EXTRUDE = [
-    { d: 2.5, c: "rgba(0,0,0,0.55)" },
-    { d: 1.5, c: "rgba(0,0,0,0.65)" },
-    { d: 0.75, c: edge },
+    { d: px(2.5), c: "rgba(0,0,0,0.55)" },
+    { d: px(1.5), c: "rgba(0,0,0,0.65)" },
+    { d: px(0.75), c: edge },
   ];
 
   return (
@@ -112,7 +114,7 @@ function Title3D({
               minimumFontScale={0.6}
               style={[
                 st.titleText,
-                { position: "absolute", top: l.d, left: l.d, color: l.c },
+                { position: "absolute", top: l.d, left: l.d, right: -l.d, color: l.c },
               ]}
             >
               {label}
@@ -126,9 +128,7 @@ function Title3D({
               st.titleText,
               {
                 color: tint,
-                textShadowColor: "rgba(255,255,255,0.55)",
-                textShadowOffset: { width: 0, height: -1 },
-                textShadowRadius: 1,
+                
               },
             ]}
           >
@@ -143,7 +143,7 @@ function TileIcon({ source, size = 44, style }) {
   return (
     <Image
       source={source}
-      style={[{ width: size, height: size }, style]}
+      style={[{ width: size, height: size, maxWidth: "85%", maxHeight: "100%" }, style]}
       resizeMode="contain"
     />
   );
@@ -378,7 +378,7 @@ function JarvisTile({
           <Texture />
           <Animated.Image
             source={iconSource}
-            style={{ width: 54, height: 54, transform: [{ scale: pulse }] }}
+            style={{ width: 54, height: 54, maxWidth: "85%", maxHeight: "100%", transform: [{ scale: pulse }] }}
             resizeMode="contain"
           />
         </LinearGradient>
@@ -606,8 +606,8 @@ const st = StyleSheet.create({
   fabIcon: { fontSize: 12, fontWeight: "900", color: "#4E3A22" },
   typeBadge: {
     position: "absolute",
-    right: 6,
-    bottom: 6,
+    top: 5,
+    right: 5,
     width: 24,
     height: 24,
     borderRadius: 12,
