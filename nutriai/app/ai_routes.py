@@ -626,7 +626,12 @@ ATURAN TEKNIS:
         payload = json.dumps({
             'system_instruction': {'parts': [{'text': system_prompt}]},
             'contents':           [{'parts': parts}],
-            'generationConfig':   {'temperature': 0.4, 'maxOutputTokens': 1800},
+            'generationConfig':   {
+                'temperature': 0.4,
+                'maxOutputTokens': 2048,
+                'responseMimeType': 'application/json',
+                'thinkingConfig': {'thinkingBudget': 0},
+            },
         }).encode()
 
         current_app.logger.info(f'[VoiceCmd] model={model} audio={bool(audio_b64)} len={len(audio_b64)}')
@@ -660,13 +665,24 @@ ATURAN TEKNIS:
         raw = re.sub(r'^```[a-zA-Z]*\s*', '', raw)
         raw = re.sub(r'\s*```$',           '', raw).strip()
         current_app.logger.info(f'[VoiceCmd] Gemini OK: {raw[:100]}')
-        ai_data = json.loads(raw)
+        try:
+            ai_data = json.loads(raw, strict=False)
+        except json.JSONDecodeError:
+            _m = re.search(r'\{.*\}', raw, re.DOTALL)
+            if not _m:
+                raise
+            ai_data = json.loads(_m.group(0), strict=False)
 
     except RuntimeError as e:
         return jsonify({'error': f'AI tidak tersedia: {str(e)}'}), 503
     except json.JSONDecodeError as e:
-        current_app.logger.error(f'[VoiceCmd] JSON error: {e} | raw: {raw[:300]}')
-        return jsonify({'error': 'AI response tidak valid, coba ulangi'}), 500
+        current_app.logger.error(f'[VoiceCmd] JSON error: {e} | raw: {raw[:1500]}')
+        _msg = 'Maaf, Jarvis kurang menangkap perintahmu barusan. Coba ulangi ya.'
+        return jsonify({
+            'intent': 'unclear', 'reply': _msg, 'tts_text': _msg,
+            'confidence': 'low', 'unclear_reason': 'respons AI tidak valid',
+            'action_result': {'intent': 'unclear', 'status': 'ok'},
+        }), 200
     except Exception as e:
         current_app.logger.error(f'[VoiceCmd] Unexpected: {e}', exc_info=True)
         return jsonify({'error': f'Error: {str(e)}'}), 500
