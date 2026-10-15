@@ -323,7 +323,7 @@ export default function LoginScreen({ navigation }) {
         source={KATAK}
         style={[
           styles.katakImg,
-          { bottom: Platform.OS === "ios" ? -66 : insets.bottom - 50 },
+          { bottom: Platform.OS === "ios" ? -56 : insets.bottom - 50 },
         ]}
         resizeMode="contain"
         pointerEvents="none"
