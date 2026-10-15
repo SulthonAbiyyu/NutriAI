@@ -572,8 +572,8 @@ export default function AiChatScreen() {
             .concat({
               id: `err_${Date.now()}`,
               role: "bot",
-              text: "⚠️ NutriAI tidak tersedia. Pastikan koneksi internet dan GEMINI_API_KEY sudah dikonfigurasi di server.",
-              tts_text: "NutriAI tidak tersedia saat ini.",
+              text: "⚠️ Jarvis belum bisa dihubungi. Cek koneksi internetmu lalu coba lagi ya 🙏",
+              tts_text: "Jarvis belum bisa dihubungi. Coba lagi nanti ya.",
               timestamp: new Date().toLocaleTimeString("id-ID", {
                 hour: "2-digit",
                 minute: "2-digit",

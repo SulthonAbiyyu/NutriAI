@@ -241,7 +241,8 @@ def ai_meal_suggestion():
             'context':    {'sisa_kalori': sisa_kal, 'sisa_protein': sisa_prot},
         }), 200
     except Exception as e:
-        return jsonify({'error': f'AI error: {str(e)}'}), 503
+        from .ai_errors import friendly_ai_error
+        return jsonify({'error': friendly_ai_error(e, 'ai_routes')}), 503
 
 
 @ai_bp.route('/api/ai/analyze-image', methods=['POST'])
@@ -282,7 +283,8 @@ def ai_analyze_image():
     except json.JSONDecodeError:
         return jsonify({'result': None, 'raw': result['text'], 'tts_text': result['tts_text']}), 200
     except Exception as e:
-        return jsonify({'error': f'AI error: {str(e)}'}), 503
+        from .ai_errors import friendly_ai_error
+        return jsonify({'error': friendly_ai_error(e, 'ai_routes')}), 503
 
 
 @ai_bp.route('/api/ai/chat', methods=['POST'])
@@ -352,7 +354,8 @@ def ai_chat():
         result = call_gemini(full_prompt)
         return jsonify({'reply': result['text'], 'tts_text': result['tts_text']}), 200
     except Exception as e:
-        return jsonify({'error': f'AI error: {str(e)}'}), 503
+        from .ai_errors import friendly_ai_error
+        return jsonify({'error': friendly_ai_error(e, 'ai_routes')}), 503
 
 
 @ai_bp.route('/api/ai/weekly-analysis', methods=['GET'])
@@ -400,7 +403,8 @@ def ai_weekly_analysis():
             },
         }), 200
     except Exception as e:
-        return jsonify({'error': f'AI error: {str(e)}'}), 503
+        from .ai_errors import friendly_ai_error
+        return jsonify({'error': friendly_ai_error(e, 'ai_routes')}), 503
 
 
 # ─────────────────────────────────────────────────────────
@@ -694,7 +698,8 @@ ATURAN TEKNIS:
             ai_data = json.loads(_m.group(0), strict=False)
 
     except RuntimeError as e:
-        return jsonify({'error': f'AI tidak tersedia: {str(e)}'}), 503
+        from .ai_errors import friendly_ai_error
+        return jsonify({'error': friendly_ai_error(e, 'VoiceCmd')}), 503
     except json.JSONDecodeError as e:
         current_app.logger.error(f'[VoiceCmd] JSON error: {e} | raw: {raw[:1500]}')
         _msg = 'Maaf, Jarvis kurang menangkap perintahmu barusan. Coba ulangi ya.'
@@ -705,7 +710,7 @@ ATURAN TEKNIS:
         }), 200
     except Exception as e:
         current_app.logger.error(f'[VoiceCmd] Unexpected: {e}', exc_info=True)
-        return jsonify({'error': f'Error: {str(e)}'}), 500
+        return jsonify({'error': 'Ups, ada kendala di server. Coba lagi sebentar ya 🙏'}), 500
 
     intent         = ai_data.get('intent', 'general')
     reply          = ai_data.get('reply', '')
@@ -1035,7 +1040,7 @@ ATURAN TEKNIS:
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'[VoiceCmd] Action error intent={intent}: {e}', exc_info=True)
-        action_result.update({'status': 'error', 'error': str(e)})
+        action_result.update({'status': 'error', 'error': 'gagal_memproses'})
         # FIX: kalau eksekusi/commit DB gagal karena alasan APAPUN, reply
         # dari Gemini udah kadung optimis duluan ("sudah dicatat!") karena
         # reply itu digenerate SEBELUM eksekusi DB (lihat atas). Timpa di
