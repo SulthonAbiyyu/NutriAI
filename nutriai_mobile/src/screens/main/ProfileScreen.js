@@ -256,11 +256,24 @@ function MenuRow3D({
   );
 }
 
+function bmiLayout(w) {
+  const imgW = Math.round(Math.max(84, Math.min(144, (w || 300) * 0.32)));
+  const imgH = Math.round(imgW * 0.86);
+  return {
+    imgW,
+    imgH,
+    top: -Math.round(imgH * 0.11),
+    right: -Math.round(imgW * 0.04),
+    mr: Math.round((imgW + imgH) / 2 - 14),
+  };
+}
+
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [bmiW, setBmiW] = useState(0);
   const { data: user, loading, execute } = useApi(getProfile);
 
   useRefreshOnFocus(execute);
@@ -474,6 +487,7 @@ export default function ProfileScreen() {
                   colors={["#0E1A11", "#050A06"]}
                   start={{ x: 0.1, y: 0 }}
                   end={{ x: 0.9, y: 1 }}
+                  onLayout={(e) => setBmiW(e.nativeEvent.layout.width)}
                   style={styles.bmiInner}
                 >
                   <ShadowOverlay opacity={0.2} />
@@ -509,7 +523,13 @@ export default function ProfileScreen() {
                     </View>
                   </View>
 
-                  <View style={{ flex: 1, marginLeft: 12, marginRight: 58 }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      marginLeft: 12,
+                      marginRight: bmiLayout(bmiW).mr,
+                    }}
+                  >
                     <View style={styles.bmiStatusRow}>
                       <Text
                         style={[styles.bmiStatusText, { color: bmiInfo.color }]}
@@ -525,17 +545,35 @@ export default function ProfileScreen() {
                         {bmiIsNormal ? "✓" : "⚠️"}
                       </Text>
                     </View>
-                    <Text style={styles.bmiDescText} numberOfLines={1}>
+                    <Text
+                      style={styles.bmiDescText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
                       {bmiDesc}
                     </Text>
-                    <Text style={styles.bmiTdeeText}>
+                    <Text
+                      style={styles.bmiTdeeText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
                       TDEE: {user.tdee} kcal/hari
                     </Text>
                   </View>
 
                   <Image
                     source={ICONS.timbangan}
-                    style={styles.bmiScaleImg}
+                    style={[
+                      styles.bmiScaleImg,
+                      {
+                        width: bmiLayout(bmiW).imgW,
+                        height: bmiLayout(bmiW).imgH,
+                        top: bmiLayout(bmiW).top,
+                        right: bmiLayout(bmiW).right,
+                      },
+                    ]}
                     resizeMode="contain"
                   />
                 </LinearGradient>
@@ -965,7 +1003,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.06)",
   },
-  infoLabel: { flex: 1, fontSize: 13, color: "rgba(255,255,255,0.55)" },
+  infoLabel: { flex: 1, fontSize: 13, color: TEXT_WHITE },
   infoValue: {
     fontSize: 13,
     fontWeight: "700",
