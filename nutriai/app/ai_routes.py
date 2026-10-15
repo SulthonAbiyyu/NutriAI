@@ -1109,6 +1109,7 @@ def ai_confirm_tambah_data():
     # ini cuma fallback simple local-save.
     image_path = ''
     file = request.files.get('food_image')
+    current_app.logger.info(f'[ConfirmTambahData] foto diterima={bool(file and file.filename)} keys={list(request.files.keys())}')
     if file and file.filename:
         from werkzeug.utils import secure_filename
         from app.routes import upload_to_supabase
@@ -1116,8 +1117,9 @@ def ai_confirm_tambah_data():
             image_path = upload_to_supabase(
                 file.read(), secure_filename(file.filename), bucket='foods'
             ) or ''
+            current_app.logger.info(f'[ConfirmTambahData] upload selesai image_path={image_path!r}')
         except Exception as e:
-            print(f'[ConfirmTambahData] Upload foto gagal: {e}')
+            current_app.logger.error(f'[ConfirmTambahData] Upload foto gagal: {e}', exc_info=True)
             image_path = ''
 
     food_baru = Food(

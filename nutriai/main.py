@@ -31,6 +31,10 @@ if DATABASE_URL.startswith('postgres://'):
 
 app.config['SQLALCHEMY_DATABASE_URI']        = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,  # cek koneksi sebelum dipakai, buang kalau sudah mati
+    'pool_recycle':  280,   # daur ulang koneksi sebelum diputus server/pooler
+}
 app.config['JWT_SECRET_KEY']                 = os.environ.get('JWT_SECRET_KEY') or (_ for _ in ()).throw(RuntimeError('JWT_SECRET_KEY wajib diset di .env'))  # noqa
 app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(days=30)
 
