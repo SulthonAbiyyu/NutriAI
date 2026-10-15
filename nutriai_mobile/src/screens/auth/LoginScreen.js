@@ -323,7 +323,7 @@ export default function LoginScreen({ navigation }) {
         source={KATAK}
         style={[
           styles.katakImg,
-          { bottom: Platform.OS === "ios" ? -56 : insets.bottom - 50 },
+          { bottom: Platform.OS === "ios" ? -46 : insets.bottom - 50 },
         ]}
         resizeMode="contain"
         pointerEvents="none"
@@ -343,7 +343,14 @@ export default function LoginScreen({ navigation }) {
         >
           {}
           <View style={styles.hero}>
-            <Image source={LOGO} style={styles.logoImg} resizeMode="contain" />
+            <View style={styles.logoWrap}>
+              <View pointerEvents="none" style={styles.logoGlow} />
+              <Image
+                source={LOGO}
+                style={styles.logoImg}
+                resizeMode="contain"
+              />
+            </View>
             <Image
               source={LOGOTEKS}
               style={styles.logoTeksImg}
@@ -483,15 +490,25 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
   },
-  logoImg: {
+  logoWrap: {
     width: 110,
     height: 110,
     marginBottom: -14,
-    shadowColor: GREEN_GLOW,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  logoGlow: {
+    position: "absolute",
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: "rgba(61,255,143,0.10)",
+    shadowColor: "#3DFF8F",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+  },
+  logoImg: { width: 110, height: 110 },
   logoTeksImg: { width: 260, height: 74, marginBottom: -10 },
   tagline: {
     marginTop: -6,
