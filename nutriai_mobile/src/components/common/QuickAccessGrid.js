@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Rect } from "react-native-svg";
 import { ICONS } from "../../constants";
 function ShadowOverlay({ opacity = 0.32 }) {
   return (
@@ -139,6 +139,22 @@ function Title3D({
     </View>
   );
 }
+function KeyboardIcon({ size = 17, color = "#FDEDE0" }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x="2" y="5.5" width="20" height="13" rx="3" fill="none" stroke={color} strokeWidth="1.7" />
+      <Circle cx="6.5" cy="9.5" r="1" fill={color} />
+      <Circle cx="10.2" cy="9.5" r="1" fill={color} />
+      <Circle cx="13.8" cy="9.5" r="1" fill={color} />
+      <Circle cx="17.5" cy="9.5" r="1" fill={color} />
+      <Circle cx="8.4" cy="12" r="1" fill={color} />
+      <Circle cx="12" cy="12" r="1" fill={color} />
+      <Circle cx="15.6" cy="12" r="1" fill={color} />
+      <Rect x="8" y="14.2" width="8" height="1.8" rx="0.9" fill={color} />
+    </Svg>
+  );
+}
+
 function TileIcon({ source, size = 44, style }) {
   return (
     <Image
@@ -391,7 +407,7 @@ function JarvisTile({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="Ketik perintah untuk Jarvis"
         >
-          <Text style={st.typeBadgeIcon}>⌨</Text>
+          <KeyboardIcon />
         </TouchableOpacity>
       )}
       {title && (
@@ -608,10 +624,12 @@ const st = StyleSheet.create({
     position: "absolute",
     top: 5,
     right: 5,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.85)",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#1F1814",
+    borderWidth: 1,
+    borderColor: "rgba(253,237,224,0.28)",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "rgba(0,0,0,0.25)",
