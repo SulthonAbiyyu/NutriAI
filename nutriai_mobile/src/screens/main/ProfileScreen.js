@@ -257,12 +257,12 @@ function MenuRow3D({
 }
 
 function bmiLayout(w) {
-  const imgW = Math.round(Math.max(84, Math.min(144, (w || 300) * 0.32)));
+  const imgW = Math.round(Math.max(84, Math.min(144, (w || 300) * 0.36)));
   const imgH = Math.round(imgW * 0.86);
   return {
     imgW,
     imgH,
-    top: -Math.round(imgH * 0.11),
+    top: Math.min(-2, 110 - imgH),
     right: -Math.round(imgW * 0.04),
     mr: Math.round((imgW + imgH) / 2 - 14),
   };
