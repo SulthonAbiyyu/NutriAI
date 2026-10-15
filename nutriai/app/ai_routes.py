@@ -554,7 +554,7 @@ PRINSIP INTERPRETASI:
 
 ▶ tambah_data → user ingin daftarkan makanan baru ke database (bukan mencatat makan)
   "tambahkan data rendang ke database" | "daftarkan tahu goreng" | "input data nutrisi tempe 100g"
-  → Isi new_food dengan nilai gizi berdasarkan pengetahuanmu. gram_per_porsi = gram yg disebutkan (default 100)
+  → Isi new_food dengan nilai gizi berdasarkan pengetahuanmu. gram_per_porsi = gram yg disebutkan user; jika tidak disebut, isi berat 1 porsi yang lazim untuk makanan itu
 
 ▶ use_template → user sebut template/preset/menu favorit
   "pakai template sarapan" | "gunakan menu makan siang favorit"
@@ -594,7 +594,7 @@ BALAS HANYA dalam format JSON ini, TIDAK BOLEH ada teks di luar JSON:
       "karbo": <integer>,
       "lemak": <integer>,
       "serat": <integer>,
-      "gram_per_porsi": <integer, default 100>
+      "gram_per_porsi": <integer, berat 1 porsi lazim dalam gram>
     }},
     "template_id": <integer id template, untuk use_template>,
     "waktu_makan_override": "Pagi|Siang|Sore|Malam",
@@ -609,7 +609,7 @@ BALAS HANYA dalam format JSON ini, TIDAK BOLEH ada teks di luar JSON:
 
 ATURAN TEKNIS:
 - add_food: WAJIB cocokkan nama ke DATABASE MAKANAN. Fuzzy match hanya untuk variasi penulisan atau jenis makanan yang SAMA (misal "nasi putih" cocok "Nasi"). Makanan yang BERBEDA jenis TIDAK BOLEH dicocokkan walau ada kata yang mirip (misal "kentang goreng" BUKAN "ayam goreng" dan BUKAN mie instan). food_id harus persis id dari DATABASE MAKANAN. Tidak ada di DB → not_found, JANGAN masukkan ke items. Isi "nama_diucapkan" dengan nama makanan persis seperti yang disebut user
-- tambah_data: isi new_food dengan estimasi gizi terbaik dari pengetahuanmu. Semua nilai integer. Jika tidak tahu → 0 | SEMUA nilai gizi new_food (kalori, protein, karbo, lemak, serat) WAJIB per 100 gram, bukan per porsi, berapa pun gram_per_porsi. gram_per_porsi = berat 1 porsi yang wajar (atau gram yang disebut user, default 100)
+- tambah_data: isi new_food dengan estimasi gizi terbaik dari pengetahuanmu. Semua nilai integer. Jika tidak tahu → 0 | Nilai gizi new_food (kalori, protein, karbo, lemak, serat) WAJIB per 100 gram. gram_per_porsi WAJIB berat 1 porsi yang lazim disajikan di Indonesia, dalam gram, sesuai jenis makanannya (patokan kasar: kentang goreng 100-150, nasi putih 1 piring 150-200, ayam goreng 1 potong 80-120, bakso 1 mangkok 300-350, mie ayam 1 mangkok 350-450). JANGAN mengisi 100 begitu saja. Jika user menyebut gram, pakai gram itu
 - Konversi satuan: "centong/piring"=1 porsi nasi | "potong/iris/biji"=1 porsi lauk | "gelas"=250ml | "botol"=600ml | "mangkok/bowl"=1 porsi | "sendok makan"=15g | "sdm"=15g | "sdt"=5g
 - Waktu makan: "pagi/sarapan"→Pagi | "siang/makan siang/lunch"→Siang | "sore/snack sore"→Sore | "malam/dinner/makan malam"→Malam. Jika tidak disebutkan → gunakan {waktu_default}
 - Jika audio tidak jelas/noise → intent "unclear", bukan general
