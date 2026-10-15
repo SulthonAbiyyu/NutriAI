@@ -434,6 +434,13 @@ def ai_voice_command():
 
     if not text_input and not audio_b64:
         return jsonify({'error': 'Kirim text atau audio_base64'}), 400
+    if len(text_input) > 500:
+        return jsonify({'error': 'Teks terlalu panjang (maks 500 karakter)'}), 400
+    if not mime_type.startswith('audio/'):
+        mime_type = 'audio/mp4'
+    if not isinstance(history, list):
+        history = []
+    history = [h for h in history[-8:] if isinstance(h, dict)]
     if audio_b64 and len(audio_b64) > 10_000_000:
         return jsonify({'error': 'Audio terlalu panjang, coba bicara lebih singkat'}), 400
 
@@ -490,7 +497,7 @@ def ai_voice_command():
         lines = []
         for h in history[-8:]:  # max 8 pesan terakhir
             role = 'User' if h.get('role') == 'user' else 'Jarvis'
-            lines.append(f"{role}: {h.get('text', '')}")
+            lines.append(f"{role}: {str(h.get('text', ''))[:500]}")
         history_text = '\n'.join(lines)
 
     system_prompt = f"""Kamu adalah NutriAI Jarvis, asisten nutrisi voice pribadi yang cerdas, hangat, dan peka konteks.
@@ -789,7 +796,7 @@ ATURAN TEKNIS:
                 action_result.update({'status': 'error', 'error': 'Nama makanan tidak ditemukan dari perintah'})
             else:
                 existing = Food.query.filter(
-                    Food.nama_makanan.ilike(nama),
+                    db.func.lower(Food.nama_makanan) == nama.lower(),
                     Food.deleted_at.is_(None),
                     db.or_(Food.user_id.is_(None), Food.user_id == user.id),
                 ).first()
@@ -1080,6 +1087,13 @@ def ai_confirm_tambah_data():
         return jsonify({'error': 'Kalori tidak valid, tidak bisa tambah makanan dengan kalori 0'}), 400
     if gram_per_porsi <= 0:
         return jsonify({'error': 'Gram per porsi harus lebih dari 0'}), 400
+    if gram_per_porsi > 5000:
+        return jsonify({'error': 'Gram per porsi terlalu besar (maks 5000 g)'}), 400
+    if kalori > 10000 or any(v < 0 or v > 2000 for v in (protein, karbo, lemak, serat)):
+        return jsonify({'error': 'Nilai nutrisi tidak masuk akal, periksa lagi angkanya'}), 400
+    nama = ' '.join(nama.split())
+    if len(nama) > 60:
+        return jsonify({'error': 'Nama makanan terlalu panjang (maks 60 karakter)'}), 400
 
     # Cek duplikat lagi — bisa aja makanan ini sempat ditambahkan orang lain
     # di antara waktu estimasi (voice-command) dan waktu user tekan "Simpan".
@@ -1087,7 +1101,7 @@ def ai_confirm_tambah_data():
     # jangan blokir gara-gara makanan pribadi user LAIN kebetulan nama sama,
     # karena itu tidak pernah kelihatan olehnya juga (pesan akan membingungkan).
     existing = Food.query.filter(
-        Food.nama_makanan.ilike(nama),
+        db.func.lower(Food.nama_makanan) == nama.lower(),
         Food.deleted_at.is_(None),
         db.or_(Food.user_id.is_(None), Food.user_id == user.id),
     ).first()
@@ -1114,8 +1128,14 @@ def ai_confirm_tambah_data():
         from werkzeug.utils import secure_filename
         from app.routes import upload_to_supabase
         try:
+            _ext  = os.path.splitext(file.filename)[1].lower().lstrip('.')
+            _data = file.read()
+            if _ext not in ('jpg', 'jpeg', 'png', 'webp'):
+                raise ValueError(f'format foto tidak didukung: {_ext!r}')
+            if len(_data) > 5 * 1024 * 1024:
+                raise ValueError('ukuran foto melebihi 5 MB')
             image_path = upload_to_supabase(
-                file.read(), secure_filename(file.filename), bucket='foods'
+                _data, secure_filename(file.filename), bucket='foods'
             ) or ''
             current_app.logger.info(f'[ConfirmTambahData] upload selesai image_path={image_path!r}')
         except Exception as e:
@@ -1138,8 +1158,13 @@ def ai_confirm_tambah_data():
         image          = image_path,
         is_verified    = False,
     )
-    db.session.add(food_baru)
-    db.session.commit()
+    try:
+        db.session.add(food_baru)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'[ConfirmTambahData] Gagal simpan ke DB: {e}', exc_info=True)
+        return jsonify({'error': 'Gagal menyimpan ke database, coba lagi.'}), 500
 
     return jsonify({
         'status': 'added',
