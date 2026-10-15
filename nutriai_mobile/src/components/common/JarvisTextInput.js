@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   Keyboard,
+  LayoutAnimation,
   Modal,
   Platform,
   StyleSheet,
@@ -63,6 +64,34 @@ export default function JarvisTextInput({
   const scaleIn = useRef(new Animated.Value(0.85)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
 
+  const [kbTop, setKbTop] = useState(null);
+  const [popH, setPopH] = useState(POP_HEIGHT);
+  useEffect(() => {
+    if (!visible) {
+      setKbTop(null);
+      return;
+    }
+    const ios = Platform.OS === "ios";
+    const showEvt = ios ? "keyboardWillChangeFrame" : "keyboardDidShow";
+    const hideEvt = ios ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = (e) => {
+      const { screenY, height } = e.endCoordinates;
+      const topY = ios ? screenY : Dimensions.get("screen").height - height;
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKbTop(topY);
+    };
+    const onHide = () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKbTop(null);
+    };
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [visible]);
+
   const [, forceReposition] = useState(0);
   useEffect(() => {
     const sub = Dimensions.addEventListener("change", () =>
@@ -100,7 +129,13 @@ export default function JarvisTextInput({
 
   if (!visible) return null;
 
-  const { left, top, arrowLeft } = computePosition(anchor, insets.top);
+  const pos = computePosition(anchor, insets.top);
+  const { left, arrowLeft } = pos;
+  let top = pos.top;
+  if (kbTop != null) {
+    const maxTop = kbTop - popH - 14;
+    top = Math.max(insets.top + EDGE_PAD, Math.min(top, maxTop));
+  }
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -128,6 +163,7 @@ export default function JarvisTextInput({
         />
 
         <Animated.View
+          onLayout={(e) => setPopH(e.nativeEvent.layout.height)}
           style={[
             ov.popWrap,
             { left, top, opacity: fadeIn, transform: [{ scale: scaleIn }] },
