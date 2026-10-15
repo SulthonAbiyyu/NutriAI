@@ -1,10 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,6 +13,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -214,6 +217,61 @@ function InputIconBox({ children }) {
 export default function LoginScreen({ navigation }) {
   const { signIn } = useAuth();
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const cardRef = useRef(null);
+  const shiftAnim = useRef(new Animated.Value(0)).current;
+  const baseRef = useRef(null);
+
+  useEffect(() => {
+    const ios = Platform.OS === "ios";
+    const showEvt = ios ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = ios ? "keyboardWillHide" : "keyboardDidHide";
+
+    const animateTo = (shift, ms) => {
+      Animated.timing(shiftAnim, {
+        toValue: -shift,
+        duration: ms,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const compute = (kbTop, ms) => {
+      const b = baseRef.current;
+      if (!b) return;
+      const need = b.bottom + 16 - kbTop;
+      const maxShift = Math.max(0, b.top - (insets.top + 8));
+      animateTo(Math.max(0, Math.min(need, maxShift)), ms);
+    };
+
+    const onShow = (e) => {
+      const kbTop = e.endCoordinates.screenY;
+      const ms = ios ? e.duration || 250 : 200;
+      const run = () => {
+        if (baseRef.current) {
+          compute(kbTop, ms);
+          return;
+        }
+        cardRef.current?.measureInWindow((x, y, w, h) => {
+          baseRef.current = { top: y, bottom: y + h };
+          compute(kbTop, ms);
+        });
+      };
+      if (ios) run();
+      else setTimeout(run, 120);
+    };
+
+    const onHide = (e) => {
+      baseRef.current = null;
+      animateTo(0, ios ? (e && e.duration) || 250 : 200);
+    };
+
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [insets.top]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -263,26 +321,25 @@ export default function LoginScreen({ navigation }) {
 
       <Image
         source={KATAK}
-        style={[styles.katakImg, { bottom: insets.bottom - 50 }]}
+        style={[
+          styles.katakImg,
+          { bottom: Platform.OS === "ios" ? -66 : insets.bottom - 50 },
+        ]}
         resizeMode="contain"
         pointerEvents="none"
       />
 
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-      >
-        <ScrollView
-          contentContainerStyle={[
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <Animated.View
+          style={[
+            styles.container,
             styles.scroll,
             {
               paddingTop: insets.top + Spacing.lg,
-              paddingBottom: insets.bottom + 140,
+              paddingBottom: insets.bottom + (winH < 740 ? 70 : 140),
+              transform: [{ translateY: shiftAnim }],
             },
           ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
           {}
           <View style={styles.hero}>
@@ -299,7 +356,7 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           {}
-          <View style={styles.cardWrap}>
+          <View ref={cardRef} collapsable={false} style={styles.cardWrap}>
             <DepthStack radius={26} />
             <LinearGradient
               colors={["rgba(15,40,24,0.92)", "rgba(4,14,8,0.92)"]}
@@ -407,8 +464,8 @@ export default function LoginScreen({ navigation }) {
 
           {}
           <Text style={styles.footerText}>© {CURRENT_YEAR} Matchaby</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </Animated.View>
+      </TouchableWithoutFeedback>
     </LinearGradient>
   );
 }
