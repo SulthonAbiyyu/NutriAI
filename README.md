@@ -6,12 +6,21 @@
 
 **Aplikasi nutrition tracker mobile dengan AI voice assistant "Jarvis"**
 
-NutriAI adalah aplikasi mobile untuk tracking nutrisi dan kalori harian, dibangun dengan React Native (Expo) di sisi frontend dan Flask di sisi backend. Aplikasi ini dilengkapi dengan **Jarvis**, asisten AI voice-command (powered by Google Gemini) yang dapat mencatat, menghapus, dan menganalisis asupan makanan hanya lewat perintah suara — serta **AI Chat**, chatbot berbasis teks untuk konsultasi nutrisi personal.
+NutriAI adalah aplikasi mobile (tersedia untuk **Android** dan **iOS**) untuk tracking nutrisi dan kalori harian, dibangun dengan React Native (Expo) di sisi frontend dan Flask di sisi backend. Aplikasi ini dilengkapi dengan **Jarvis**, asisten AI voice-command (powered by Google Gemini) yang dapat mencatat, menghapus, dan menganalisis asupan makanan hanya lewat perintah suara — serta **AI Chat**, chatbot berbasis teks untuk konsultasi nutrisi personal.
 
 🔗 **Live Backend:** [https://nutriai-37bw.onrender.com](https://nutriai-37bw.onrender.com)
 📲 **Download APK:** lihat halaman [Releases](https://github.com/SulthonAbiyyu/NutriAI/releases/latest)
+🍎 **iOS:** sudah tersedia, lihat [cara menjalankannya](#-menjalankan-versi-ios)
 
 > ⏱️ Catatan: backend di-host di Render free tier, jadi server akan "tidur" saat tidak ada aktivitas selama beberapa saat. Request pertama setelah idle bisa butuh waktu lebih lama (±30–50 detik) untuk "bangun" kembali.
+
+> 🍎 **Kabar baik: NutriAI kini tersedia untuk iOS!** Selain Android, aplikasi sekarang juga berjalan di iPhone, dengan fitur yang sama termasuk Jarvis voice assistant. Lihat [cara menjalankannya](#-menjalankan-versi-ios).
+
+<p align="center">
+  <img src="docs/images/ios1.png" width="220" alt="NutriAI di iOS - tampilan 1" />
+  <img src="docs/images/ios2.png" width="220" alt="NutriAI di iOS - tampilan 2" />
+</p>
+<p align="center"><i>NutriAI berjalan di iPhone (build native iOS)</i></p>
 
 ---
 
@@ -39,7 +48,7 @@ Dibanding aplikasi nutrition tracker pada umumnya, beberapa hal yang membedakan 
 |---|---|---|
 | Cara mencatat makanan | Cari & input manual per item | Cukup bicara ke Jarvis, bisa juga manual |
 | Rekomendasi/AI chat | Generik, tidak terhubung ke data pengguna | Personal, berbasis profil & progres harian real-time |
-| Konfirmasi data baru | Data baru langsung masuk ke database | Ada alur konfirmasi sebelum makanan baru disimpan, mencegah data sampah |
+| Konfirmasi data baru | Data baru langsung masuk ke database | Ada alur konfirmasi (nama, gram per porsi, foto) dengan gizi yang dihitung ulang otomatis sebelum makanan baru disimpan, mencegah data sampah |
 | Interaksi suara | Jarang tersedia atau sebatas dikte teks | Voice command dua arah dengan pemahaman konteks implisit, bisa dibatalkan kapan saja |
 
 ---
@@ -67,7 +76,10 @@ Dibanding aplikasi nutrition tracker pada umumnya, beberapa hal yang membedakan 
 - Visual spectrum bar yang bereaksi ke level suara asli dari mic (bukan animasi dekoratif)
 - Memahami konteks implisit (misal "laper nih" → saran menu, "abis gym" → saran tinggi protein)
 - Bisa mencatat makanan, menghapus entry, mencatat air minum & berat badan, mendaftarkan makanan baru ke database, memakai meal template — semuanya lewat perintah suara
-- Alur konfirmasi sebelum menyimpan makanan baru ke database (isi gram per porsi + opsional foto) agar data tidak asal masuk
+- **Pencocokan makanan divalidasi di server** — jika AI memilih makanan dari database yang namanya tidak sesuai dengan yang diucapkan (misal "kentang goreng" tercocok ke mi instan), hasilnya ditolak dan Jarvis menawarkan untuk menambahkan data baru, bukan mencatat makanan yang salah
+- **Tambah data makanan baru lewat suara** — AI mengestimasi gizi (per 100 g) dan berat satu porsi yang lazim untuk makanan tersebut. Di form konfirmasi, **nama makanan, gram per porsi, dan foto** bisa disesuaikan sebelum disimpan, dan angka kalori/protein/karbo/lemak **dihitung ulang otomatis** mengikuti gram yang diisi
+- Kartu loading "Mencari data …" tampil selama AI mencarikan data (dengan tombol batal), lalu langsung berganti ke form konfirmasi tanpa layar kosong di antaranya
+- Foto makanan baru tersimpan di Supabase Storage, dan setelah menyimpan muncul notifikasi hasil (berhasil, atau tersimpan tetapi foto gagal diunggah)
 - Menyimpan riwayat percakapan untuk pemahaman konteks lanjutan
 - Rekaman bisa dibatalkan kapan saja, termasuk saat sedang diproses AI
 
@@ -231,9 +243,10 @@ Dibanding aplikasi nutrition tracker pada umumnya, beberapa hal yang membedakan 
 | Kategori | Teknologi |
 |---|---|
 | Framework | React Native 0.83 + Expo SDK 55 |
+| Platform | Android & iOS |
 | Navigasi | React Navigation (bottom-tabs, stack) |
 | Database lokal | AsyncStorage (cache sesi & profil) |
-| Media & Voice Input | Expo Camera, Expo AV |
+| Media & Voice Input | Expo Camera, Expo Audio, Expo Image Picker |
 | Export | Expo Print + Expo Sharing (PDF) |
 | Animasi & UI | React Native Reanimated, React Native SVG |
 
@@ -245,7 +258,7 @@ Dibanding aplikasi nutrition tracker pada umumnya, beberapa hal yang membedakan 
 | Autentikasi | Flask-JWT-Extended |
 | Database | PostgreSQL via **Supabase** (psycopg2) |
 | File Storage | Supabase Storage (foto profil & makanan) |
-| AI | Google Gemini API (`gemini-2.5-flash`) |
+| AI | Google Gemini API (`gemini-2.5-flash`, output JSON terstruktur) |
 | Deployment | Gunicorn (Render) |
 | Scheduler | APScheduler |
 | Admin CMS | Flask + Jinja2 templates (blueprint terpisah dalam backend yang sama) |
@@ -282,6 +295,26 @@ NutriAI/
 
 ---
 
+## 🍎 Menjalankan Versi iOS
+
+Versi iOS di-build langsung dari source yang sama dengan Android (`nutriai_mobile/`).
+
+**Prasyarat:** macOS, Xcode (terpasang di `/Applications`), Node.js, serta iPhone yang tersambung (atau simulator).
+
+```bash
+cd nutriai_mobile
+npm install
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer   # sekali saja
+npx expo run:ios --device
+```
+
+Catatan:
+- Folder native `ios/` dihasilkan otomatis oleh Expo saat build dan tidak disertakan di repo.
+- Jalankan **salah satu** saja pada satu waktu: Xcode (tombol Run) atau `npx expo run:ios`. Keduanya sekaligus pada workspace yang sama membuat build gagal dengan error `unable to initiate PIF transfer session`.
+- Ikon aplikasi iOS wajib **tanpa transparansi (alpha)**; `assets/icon.png` sudah dibuat opaque 1024×1024 untuk keperluan ini.
+
+---
+
 ## 🌟 Kelebihan Teknis
 
 **Autentikasi & Keamanan**
@@ -294,12 +327,25 @@ NutriAI/
 - Rate limiting per-IP (in-memory) pada endpoint sensitif — register, login, dan pengecekan username — untuk menahan brute-force/spam otomatis
 - Pesan error login dibuat generik ("Username atau password salah") tanpa membedakan username tidak ada vs password salah, supaya tidak bisa dipakai untuk enumerasi username
 - Whitelist nilai enum (gender, tujuan, tingkat aktivitas, tipe tubuh) divalidasi di server agar data sampah/tidak valid tidak bisa tersimpan lewat panggilan API langsung
+- Kunci Supabase `service_role` hanya disimpan sebagai environment variable di server (Render), tidak ada di kode aplikasi maupun riwayat git; file `.env` masuk `.gitignore` dan sudah diverifikasi tidak pernah ter-commit
+- Pilihan makanan dari AI divalidasi ulang di server terhadap nama yang diucapkan user (mencegah salah catat akibat halusinasi/salah pilih AI)
+- Validasi server pada data makanan baru dari Jarvis: rentang nilai gizi, panjang nama, batas gram per porsi, pengecekan duplikat tanpa karakter wildcard, serta batas format & ukuran foto (jpg/jpeg/png/webp, maks. 5 MB)
+- Validasi input endpoint Jarvis: batas panjang teks, jenis MIME audio harus audio, dan bentuk/panjang riwayat percakapan diperiksa sebelum masuk ke prompt AI
+- Penyimpanan makanan baru dibungkus transaksi dengan rollback saat gagal, sehingga kegagalan database tidak meninggalkan data setengah jadi
 
 **UX Jarvis (Voice Command)**
 - Visual spectrum bar merespons level suara asli dari mikrofon secara real-time
 - Rekaman dapat dibatalkan kapan saja, termasuk saat request AI sedang diproses
 - Posisi popover otomatis menyesuaikan saat rotasi layar/perubahan dimensi, tetap terkunci dalam batas layar
 - Alur konfirmasi sebelum data makanan baru disimpan ke database komunal, mencegah data tidak valid masuk begitu saja
+
+**Keandalan AI & Backend**
+- Output Gemini dipaksa berformat JSON (`responseMimeType: application/json`) dan di-parse secara toleran; bila tetap gagal, server membalas fallback yang aman (meminta user mengulang) alih-alih error 500
+- Retry otomatis dengan backoff saat Gemini membalas 429/500/503
+- Anggaran "thinking" Gemini dibatasi supaya token output tidak habis dan jawaban tidak terpotong di tengah
+- Koneksi database memakai `pool_pre_ping` dan `pool_recycle`, sehingga koneksi idle yang sudah basi otomatis dibuang (mencegah error SSL pada request pertama setelah idle)
+- Pencatatan makan memakai tanggal WIB (UTC+7), jadi data yang dicatat dini hari tidak nyasar ke hari sebelumnya
+- Kegagalan upload foto tidak membatalkan penyimpanan makanan; kegagalan dicatat lengkap di log server dan user diberi tahu
 
 **Goal & Tracking**
 - Perhitungan progress goal berbasis selisih bertanda (signed delta) terhadap berat awal & target, bukan nilai absolut — sehingga tetap valid dan konsisten untuk goal dua arah (naik maupun turun berat badan)
@@ -310,7 +356,9 @@ NutriAI/
 
 ## ⚠️ Kekurangan
 
-- Belum tersedia versi **iOS** — saat ini aplikasi baru bisa dijalankan/di-build untuk **Android**
+- Versi **iOS** saat ini didistribusikan sebagai build dari source (Xcode / `expo run:ios`), belum tersedia lewat App Store maupun TestFlight
+- Data gizi makanan baru yang ditambahkan lewat Jarvis adalah **estimasi AI** (ditandai belum terverifikasi), jadi sebaiknya dicek ulang
+- Backend di Render free tier, sehingga request pertama setelah idle bisa lambat (cold start)
 
 ---
 
