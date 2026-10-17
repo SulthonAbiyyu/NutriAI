@@ -185,6 +185,10 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
   );
   const [imageUri, setImageUri] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [namaMakanan, setNamaMakanan] = useState(food.nama || "");
+  // Data nutrisi dari AI selalu per 100 g; skala ke gram per porsi yang diinput user.
+  const gppNum = parseInt(gramPerPorsi, 10) || 0;
+  const scaleNutri = (v) => Math.round((Number(v) || 0) * (gppNum / 100));
   const slideY = useRef(new Animated.Value(40)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -255,6 +259,11 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
   };
 
   const handleSubmit = async () => {
+    const namaBersih = namaMakanan.trim().replace(/\s+/g, " ");
+    if (!namaBersih) {
+      Alert.alert("Input Tidak Valid", "Nama makanan tidak boleh kosong.");
+      return;
+    }
     const gpp = parseInt(gramPerPorsi, 10);
     if (!gpp || gpp <= 0) {
       Alert.alert("Input Tidak Valid", "Gram per porsi harus lebih dari 0.");
@@ -264,12 +273,12 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append("nama_makanan", food.nama);
-      formData.append("kalori", String(food.kalori));
-      formData.append("protein", String(food.protein));
-      formData.append("karbo", String(food.karbo));
-      formData.append("lemak", String(food.lemak));
-      formData.append("serat", String(food.serat || 0));
+      formData.append("nama_makanan", namaBersih);
+      formData.append("kalori", String(scaleNutri(food.kalori)));
+      formData.append("protein", String(scaleNutri(food.protein)));
+      formData.append("karbo", String(scaleNutri(food.karbo)));
+      formData.append("lemak", String(scaleNutri(food.lemak)));
+      formData.append("serat", String(scaleNutri(food.serat || 0)));
       formData.append("gram_per_porsi", String(gpp));
 
       if (imageUri) {
@@ -280,7 +289,23 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
         });
       }
 
-      await onConfirm(formData);
+      const res = await onConfirm(formData);
+      if (res?.status === "duplicate") {
+        Alert.alert(
+          "Sudah Ada",
+          res.message || "Makanan ini sudah ada di database.",
+        );
+        onCancel();
+        return;
+      }
+      const fotoGagal = !!imageUri && !res?.food?.image;
+      onCancel();
+      Alert.alert(
+        fotoGagal ? "Tersimpan, tapi foto gagal" : "Berhasil ✅",
+        fotoGagal
+          ? `${namaBersih} sudah ditambahkan ke database, tapi fotonya gagal diunggah. Coba tambahkan fotonya lagi dari daftar makanan.`
+          : `${namaBersih} berhasil ditambahkan ke database.`,
+      );
     } catch (err) {
       Alert.alert("Gagal Menyimpan", err?.message || "Coba lagi ya.");
     } finally {
@@ -300,10 +325,20 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
         <View style={cf.headerRow}>
           <Text style={cf.headerEmoji}>🍽️</Text>
           <View style={{ flex: 1 }}>
-            <Text style={cf.headerTitle} numberOfLines={1}>
-              {food.nama}
-            </Text>
-            <Text style={cf.headerSub}>Lengkapi data sebelum disimpan</Text>
+            <TextInput
+              style={[
+                cf.headerTitle,
+                { padding: 0, borderBottomWidth: 1, borderBottomColor: ORANGE_BRD },
+              ]}
+              value={namaMakanan}
+              onChangeText={setNamaMakanan}
+              placeholder="Nama makanan"
+              placeholderTextColor={TXT_XS}
+              maxLength={60}
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+            <Text style={cf.headerSub}>Periksa nama & data sebelum disimpan</Text>
           </View>
           <TouchableOpacity
             onPress={onCancel}
@@ -318,34 +353,34 @@ function ConfirmFoodForm({ food, onConfirm, onCancel }) {
         <View style={cf.nutriRow}>
           <NutriBadge
             label="Kalori"
-            value={food.kalori}
+            value={scaleNutri(food.kalori)}
             unit="kcal"
             color={ORANGE}
           />
           <View style={cf.nutriDivider} />
           <NutriBadge
             label="Protein"
-            value={food.protein}
+            value={scaleNutri(food.protein)}
             unit="g"
             color={GREEN}
           />
           <View style={cf.nutriDivider} />
           <NutriBadge
             label="Karbo"
-            value={food.karbo}
+            value={scaleNutri(food.karbo)}
             unit="g"
             color={PURPLE}
           />
           <View style={cf.nutriDivider} />
           <NutriBadge
             label="Lemak"
-            value={food.lemak}
+            value={scaleNutri(food.lemak)}
             unit="g"
             color={DANGER}
           />
         </View>
         <Text style={cf.nutriNote}>
-          * Data nutrisi per 100g — estimasi dari AI
+          {`* Nutrisi untuk ${gppNum} g — estimasi AI (dihitung dari data per 100 g)`}
         </Text>
       </LinearGradient>
 

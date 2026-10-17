@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { Audio } from "expo-av";
+import { AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import { readAsStringAsync } from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -55,26 +55,9 @@ const DANGER = "#EF4444";
 const SHD_W = "rgba(15,23,42,0.08)";
 const SHD_G = "rgba(34,197,94,0.25)";
 const RECORDING_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  numberOfChannels: 1,
   isMeteringEnabled: true,
-  android: {
-    extension: ".m4a",
-    outputFormat: 2,
-    audioEncoder: 3,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
-  },
-  ios: {
-    extension: ".m4a",
-    audioQuality: 127,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
-    linearPCMBitDepth: 16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat: false,
-  },
-  web: { mimeType: "audio/webm", bitsPerSecond: 128000 },
 };
 const AUDIO_MIME = "audio/mp4";
 const MAX_RECORD_MS = 60000;
@@ -1035,7 +1018,7 @@ function ResultModal({
                         style={st.btnPri}
                       >
                         <ResShadowOverlay opacity={0.22} />
-                        <Text style={st.btnPriTxt}>Tambahkan Datanya</Text>
+                        <Text style={st.btnPriTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Tambahkan Datanya</Text>
                         <View style={st.btnPriArrow}>
                           <Text style={st.btnPriArrowTxt}>+</Text>
                         </View>
@@ -1060,7 +1043,7 @@ function ResultModal({
                           style={st.btnPri}
                         >
                           <ResShadowOverlay opacity={0.22} />
-                          <Text style={st.btnPriTxt}>Lihat Dashboard</Text>
+                          <Text style={st.btnPriTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Lihat Dashboard</Text>
                           <View style={st.btnPriArrow}>
                             <Text style={st.btnPriArrowTxt}>→</Text>
                           </View>
@@ -1116,9 +1099,21 @@ function meteringToLevel(db) {
   if (typeof db !== "number" || !isFinite(db)) return 0;
   return Math.max(0, Math.min(1, (db + 60) / 60));
 }
-function useMicRecorder({ onResult, onRefresh }) {
+function useMicRecorder({ onResult: onResultRaw, onRefresh }) {
+  const onResultRawRef = useRef(onResultRaw);
+  onResultRawRef.current = onResultRaw;
+  const pendingResultRef = useRef(null);
+  const onResult = useCallback((r) => {
+    pendingResultRef.current = r;
+  }, []);
   const [micStatus, setMicStatus] = useState("idle");
   const [micLevel, setMicLevel] = useState(0);
+  useEffect(() => {
+    if (micStatus !== "idle" || !pendingResultRef.current) return;
+    const r = pendingResultRef.current;
+    pendingResultRef.current = null;
+    setTimeout(() => onResultRawRef.current(r), 600);
+  }, [micStatus]);
   const recRef = useRef(null);
   const busyRef = useRef(false);
   const recTimerRef = useRef(null);
@@ -1151,19 +1146,30 @@ function useMicRecorder({ onResult, onRefresh }) {
     }
   }, []);
 
+  const meterTimerRef = useRef(null);
+  const stopMeter = useCallback(() => {
+    if (meterTimerRef.current) {
+      clearInterval(meterTimerRef.current);
+      meterTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       clearRecordTimer();
+      stopMeter();
       if (recRef.current) {
-        recRef.current.stopAndUnloadAsync().catch(() => {});
+        try {
+          recRef.current.stop().catch(() => {});
+        } catch (e) {}
         recRef.current = null;
       }
     };
-  }, [clearRecordTimer]);
+  }, [clearRecordTimer, stopMeter]);
 
   const startRecording = useCallback(async () => {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) {
         Alert.alert(
           "Izin Mikrofon",
@@ -1171,16 +1177,21 @@ function useMicRecorder({ onResult, onRefresh }) {
         );
         return false;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-      const { recording } =
-        await Audio.Recording.createAsync(RECORDING_OPTIONS);
-      recording.setProgressUpdateInterval(100);
-      recording.setOnRecordingStatusUpdate((status) => {
-        if (status.isRecording) setMicLevel(meteringToLevel(status.metering));
-      });
+      const recording = new AudioModule.AudioRecorder(RECORDING_OPTIONS);
+      await recording.prepareToRecordAsync();
+      recording.record();
+      stopMeter();
+      meterTimerRef.current = setInterval(() => {
+        try {
+          const status = recording.getStatus();
+          if (status.isRecording)
+            setMicLevel(meteringToLevel(status.metering));
+        } catch (e) {}
+      }, 100);
       recRef.current = recording;
       setMicLevel(0);
       setMicStatus("recording");
@@ -1192,6 +1203,7 @@ function useMicRecorder({ onResult, onRefresh }) {
       return true;
     } catch (e) {
       console.warn("[Mic] startRecording error:", e);
+      stopMeter();
       Alert.alert("Gagal memulai rekaman", e?.message ?? "Terjadi kesalahan.");
       recRef.current = null;
       setMicStatus("idle");
@@ -1264,6 +1276,7 @@ function useMicRecorder({ onResult, onRefresh }) {
 
   const stopAndProcess = useCallback(async () => {
     clearRecordTimer();
+    stopMeter();
     const recording = recRef.current;
     if (!recording) {
       busyRef.current = false;
@@ -1275,17 +1288,17 @@ function useMicRecorder({ onResult, onRefresh }) {
     recRef.current = null;
 
     try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await recording.stop();
+      await setAudioModeAsync({ allowsRecording: false });
 
-      const uri = recording.getURI();
+      const uri = recording.uri;
       if (!uri) throw new Error("URI rekaman tidak ditemukan.");
 
       const b64 = await readAsStringAsync(uri, { encoding: "base64" });
       await processCommand({ audio_base64: b64, mime_type: AUDIO_MIME });
     } catch (e) {
       console.warn("[Mic] stopAndProcess error:", e);
-      Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false }).catch(() => {});
       const errMsg = e?.response?.data?.error ?? "Gagal memproses, coba lagi.";
       onResult({ intent: "general", reply: errMsg, result: null });
     } finally {
@@ -1306,6 +1319,7 @@ function useMicRecorder({ onResult, onRefresh }) {
       return;
     }
 
+    stopMeter();
     const recording = recRef.current;
     recRef.current = null;
     setMicLevel(0);
@@ -1316,8 +1330,8 @@ function useMicRecorder({ onResult, onRefresh }) {
       return;
     }
     try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await recording.stop();
+      await setAudioModeAsync({ allowsRecording: false });
     } catch (e) {
       console.warn("[Mic] cancelRecording error:", e);
     } finally {
@@ -1491,10 +1505,19 @@ export default function DashboardScreen() {
       onResult: handleResult,
       onRefresh,
     });
+  const [processingLabel, setProcessingLabel] = useState("");
+  useEffect(() => {
+    // Kartu loading dipertahankan sampai hasil dari hook (ditunda 600 ms) tiba;
+    // bersihkan otomatis kalau proses dibatalkan atau gagal.
+    if (micStatus === "processing" || !processingLabel) return;
+    const t = setTimeout(() => setProcessingLabel(""), 1200);
+    return () => clearTimeout(t);
+  }, [micStatus, processingLabel]);
   const handleAddMissing = useCallback(
     (notFoundList = []) => {
       if (!notFoundList.length) return;
       const nama = notFoundList[0];
+      setProcessingLabel(`Mencari data ${nama}...`);
       sendText(`tambah data ${nama} ke database`);
     },
     [sendText],
@@ -1579,6 +1602,56 @@ export default function DashboardScreen() {
           />
 
           {}
+          {!!processingLabel && !pendingFood && (
+            <View style={[st.row, { marginBottom: 8 }]}>
+              <View
+                style={{
+                  width: "100%",
+                  borderRadius: 18,
+                  borderWidth: 1.5,
+                  borderColor: "rgba(249,115,22,0.35)",
+                  backgroundColor: "#FFFFFF",
+                  paddingVertical: 22,
+                  paddingHorizontal: 16,
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color="#F97316" />
+                <Text
+                  style={{
+                    marginTop: 12,
+                    fontSize: 13,
+                    fontWeight: "800",
+                    color: "#0F172A",
+                    textAlign: "center",
+                  }}
+                >
+                  {processingLabel}
+                </Text>
+                <Text style={{ marginTop: 4, fontSize: 10, color: "#64748B" }}>
+                  AI sedang mencarikan data nutrisinya
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    cancelRecording();
+                    setProcessingLabel("");
+                  }}
+                  style={{
+                    marginTop: 14,
+                    paddingHorizontal: 18,
+                    paddingVertical: 8,
+                    borderRadius: 12,
+                    backgroundColor: "#F1F5F9",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B" }}>
+                    Batal
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {pendingFood && (
             <View style={[st.row, { marginBottom: 8 }]}>
               <JarvisCard
@@ -1638,8 +1711,12 @@ export default function DashboardScreen() {
       />
 
       <JarvisVoiceOverlay
-        visible={micStatus === "recording" || micStatus === "processing"}
+        visible={
+          micStatus === "recording" ||
+          (micStatus === "processing" && !processingLabel)
+        }
         status={micStatus}
+        processingLabel={processingLabel}
         level={micLevel}
         anchor={jarvisAnchor}
         onStop={handleTalk}
@@ -1862,7 +1939,7 @@ const st = StyleSheet.create({
   resCheckBadgeTxt: { fontSize: 11, fontWeight: "900", color: "#052E16" },
   resBtnRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   btnPriOuter: {
-    flex: 1.2,
+    flex: 1.5,
     borderRadius: 24,
     position: "relative",
     shadowColor: "rgba(0,0,0,0.5)",
@@ -1873,11 +1950,12 @@ const st = StyleSheet.create({
   },
   btnPri: {
     paddingVertical: 13,
+    paddingHorizontal: 8,
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     borderWidth: 1.5,
     borderTopColor: "rgba(255,255,255,0.35)",
     borderLeftColor: "rgba(255,255,255,0.35)",
@@ -1885,7 +1963,7 @@ const st = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.5)",
     overflow: "hidden",
   },
-  btnPriTxt: { color: "#FFFFFF", fontWeight: "800", fontSize: 13.5 },
+  btnPriTxt: { color: "#FFFFFF", fontWeight: "800", fontSize: 13.5, flexShrink: 1 },
   btnPriArrow: {
     width: 22,
     height: 22,

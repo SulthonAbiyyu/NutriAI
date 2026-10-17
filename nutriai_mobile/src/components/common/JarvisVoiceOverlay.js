@@ -117,6 +117,7 @@ export default function JarvisVoiceOverlay({
   anchor,
   onStop,
   onCancel,
+  processingLabel,
 }) {
   const insets = useSafeAreaInsets();
   const isRecording = status === "recording";
@@ -258,8 +259,8 @@ export default function JarvisVoiceOverlay({
                 </View>
               </View>
 
-              <Text style={[ov.title, { color: accent }]} numberOfLines={1}>
-                {isRecording ? "Mendengarkan..." : "Memproses..."}
+              <Text style={[ov.title, { color: accent }]} numberOfLines={2}>
+                {isRecording ? "Mendengarkan..." : processingLabel || "Memproses..."}
               </Text>
 
               {}

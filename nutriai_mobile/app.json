@@ -12,7 +12,13 @@
       "backgroundColor": "#16412A"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.matchaby.nutriai-mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "NutriAI memakai kamera untuk memindai makanan.",
+        "NSPhotoLibraryUsageDescription": "NutriAI memakai galeri untuk memilih foto makanan.",
+        "NSMicrophoneUsageDescription": "NutriAI memakai mikrofon untuk perintah suara."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +41,10 @@
       "expo-sqlite",
       "expo-sharing",
       "expo-background-task",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }
